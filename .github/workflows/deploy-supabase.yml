@@ -1,9 +1,7 @@
 # Applique les changements de base de données et redéploie la fonction IA
 name: Déployer Supabase
+# Lancement manuel (Actions → Déployer Supabase → Run workflow) une fois les 3 secrets Supabase ajoutés.
 on:
-  push:
-    branches: [main]
-    paths: ['supabase/**']
   workflow_dispatch:
 permissions: { contents: read }
 jobs:
