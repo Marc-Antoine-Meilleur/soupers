@@ -10,3 +10,4 @@ web/public/brand/barn.png
 web/public/icon-*.png
 web/public/apple-touch-icon.png
 web/package-lock.json
+!.env.production

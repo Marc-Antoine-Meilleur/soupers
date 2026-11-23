@@ -25,10 +25,7 @@ jobs:
         with: { node-version: 22 }
       - run: npm install --no-fund
       - run: npm audit --omit=dev --audit-level=high
-      - run: npm run build
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_KEY: ${{ secrets.VITE_SUPABASE_KEY }}
+      - run: npm run build   # lit web/.env.production
       - uses: actions/upload-pages-artifact@v3
         with: { path: web/dist }
   deploy:
