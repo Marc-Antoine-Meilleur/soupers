@@ -5,3 +5,8 @@ dist/
 !.env.example
 .DS_Store
 supabase/.temp/
+# Générés au déploiement par scripts/make_icons.py
+web/public/brand/barn.png
+web/public/icon-*.png
+web/public/apple-touch-icon.png
+web/package-lock.json
