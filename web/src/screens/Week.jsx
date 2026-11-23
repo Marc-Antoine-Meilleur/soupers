@@ -3,7 +3,7 @@ import { supabase, ai, mondayOf, addDays, fmtDay, fmtLong, WEEKDAYS, today } fro
 import { CriteriaForm, FeedbackButton } from '../shared'
 import { useApp } from '../App'
 import { Icon, Sheet, Spinner, Header } from '../ui'
-import { RecipeDetail, RecipeEditor, useRecipes } from './Recipes'
+import { RecipeDetail, RecipeEditor, useRecipeData } from './Recipes'
 
 export default function Week() {
   const { household, go, toast } = useApp()
@@ -17,7 +17,10 @@ export default function Week() {
   const [viewing, setViewing] = useState(null)
   const [saving, setSaving] = useState(null)
   const [criteria, setCriteria] = useState(false)
-  const [recipes, reloadRecipes] = useRecipes()
+  const data = useRecipeData()
+  const { recipes } = data
+  const reloadRecipes = data.reload
+  const [history, setHistory] = useState(false)
 
   const load = async () => {
     setPlan(undefined)
@@ -25,6 +28,8 @@ export default function Week() {
     setPlan(data || null)
   }
   useEffect(() => { load() }, [week]) // eslint-disable-line
+  // Historique conservé 12 mois : les plans plus anciens sont supprimés
+  useEffect(() => { supabase.from('meal_plans').delete().lt('week_start', addDays(mondayOf(), -365)).then(() => {}) }, [])
 
   const days = (s.plan_days || []).slice().sort().map((i) => addDays(week, i))
   const persist = async (patch) => {
@@ -81,8 +86,15 @@ export default function Week() {
   const openDay = (d) => {
     if (d.recipe_id) {
       const r = recipes?.find((x) => x.id === d.recipe_id)
-      if (r) setViewing(r)
-    } else if (d.new_recipe) setViewing({ ...d.new_recipe, household_id: household.id, _new: d })
+      if (r) setViewing({ ...r, _day: d })
+      else toast('Cette recette n\'est plus disponible')
+    } else if (d.new_recipe) setViewing({ ...d.new_recipe, household_id: household.id, _new: d, _day: d })
+  }
+  // Portions d'un souper planifié (servent à la liste d'épicerie)
+  const setDayServings = async (date, servings) => {
+    if (!plan) return
+    await persist({ days: plan.days.map((x) => (x.date === date ? { ...x, servings } : x)) })
+    if (plan.status === 'approuvé') toast('Portions changées : recréez la liste d\'épicerie si besoin')
   }
 
   const isPast = addDays(week, 6) < today()
@@ -90,7 +102,7 @@ export default function Week() {
   return (
     <>
       <Header title="Ma semaine" sub={`Du ${fmtLong(week)} au ${fmtLong(addDays(week, 6))}`}
-        action={<div className="head-actions"><FeedbackButton screen="Semaine" /><button className="btn sm" onClick={() => setCriteria(true)}>Critères</button></div>} />
+        action={<div className="head-actions"><FeedbackButton screen="Semaine" /><button className="icon-btn" onClick={() => setHistory(true)} aria-label="Historique"><Icon name="history" /></button><button className="btn sm" onClick={() => setCriteria(true)}>Critères</button></div>} />
       <div className="week-nav">
         <button className="icon-btn" onClick={() => setWeek(addDays(week, -7))} aria-label="Semaine précédente"><Icon name="back" /></button>
         <span>{week === mondayOf() ? 'Cette semaine' : week === addDays(mondayOf(), 7) ? 'Semaine prochaine' : `Semaine du ${fmtDay(week)}`}</span>
@@ -126,6 +138,7 @@ export default function Week() {
                     <h3>{d.title || '—'}</h3>
                     <div className="meta">
                       {d.minutes && <span><Icon name="clock" size={14} /> {d.minutes} min</span>}
+                      {(d.recipe_id || d.new_recipe) && <span>👥 {d.servings ?? s.servings}</span>}
                       {d.new_recipe && <span className="pill violet">Nouvelle idée</span>}
                     </div>
                     {d.reason && <p className="reason">{d.reason}</p>}
@@ -169,8 +182,11 @@ export default function Week() {
       {criteria && <Sheet title="Critères des soupers" onClose={() => setCriteria(false)}
         footer={<button className="btn primary block" onClick={() => setCriteria(false)}>Terminé</button>}><CriteriaForm /></Sheet>}
       {picking && <PickRecipe day={picking} recipes={recipes} onClose={() => setPicking(null)} onPick={(d) => setDay(picking.date, d)} />}
+      {history && <History onClose={() => setHistory(false)} onOpen={(d) => { setHistory(false); openDay(d) }} />}
       {viewing && !saving && (
-        <RecipeDetail recipe={viewing} onClose={() => setViewing(null)} onChanged={() => { setViewing(null); reloadRecipes() }}
+        <RecipeDetail recipe={viewing} data={data} servings={viewing._day?.servings ?? s.servings}
+          onServings={viewing._day && plan?.days?.some((x) => x.date === viewing._day.date && x.title === viewing._day.title) ? (n) => setDayServings(viewing._day.date, n) : undefined}
+          onClose={() => setViewing(null)} onChanged={() => { setViewing(null); reloadRecipes() }}
           unsaved={viewing._new ? <button className="btn primary block" onClick={() => setSaving(viewing)}>Enregistrer dans mes recettes</button> : null} />
       )}
       {saving && (
@@ -207,6 +223,38 @@ function PickRecipe({ day, recipes, onClose, onPick }) {
           </li>
         ))}
       </ul>
+    </Sheet>
+  )
+}
+
+// Historique des menus (12 derniers mois), avec recherche
+function History({ onClose, onOpen }) {
+  const [plans, setPlans] = useState(null)
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    supabase.from('meal_plans').select('week_start,days,status').order('week_start', { ascending: false }).limit(60)
+      .then(({ data }) => setPlans(data || []))
+  }, [])
+  const term = q.trim().toLowerCase()
+  const list = (plans || []).map((p) => ({ ...p, days: (p.days || []).filter((d) => !term || d.title?.toLowerCase().includes(term)) }))
+    .filter((p) => p.days.length)
+  return (
+    <Sheet title="Historique des menus" onClose={onClose}>
+      <div className="search"><Icon name="search" size={18} /><input placeholder="Retrouver un souper…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+      {!plans ? <Spinner /> : list.length === 0 ? <p className="muted">Aucun menu trouvé.</p> : list.map((p) => (
+        <div key={p.week_start} className="hist-week">
+          <h3>Semaine du {fmtLong(p.week_start)}</h3>
+          <ul className="pick">
+            {p.days.map((d) => (
+              <li key={d.date} onClick={() => (d.recipe_id || d.new_recipe) && onOpen(d)}>
+                <span><small className="muted">{fmtDay(d.date)}</small> · {d.title}</span>
+                {(d.recipe_id || d.new_recipe) && <Icon name="next" size={16} />}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      <p className="muted small">Les menus sont conservés 12 mois.</p>
     </Sheet>
   )
 }

@@ -1,7 +1,7 @@
 {
-  "name": "Soupers · Ateliers du Champ Libre",
-  "short_name": "Champ Libre",
-  "description": "Planification des soupers, inventaire et recettes entre amis — Ateliers du Champ Libre",
+  "name": "AU MENU · Ateliers du Champ Libre",
+  "short_name": "AU MENU",
+  "description": "AU MENU — planification des soupers, inventaire et recettes entre amis — Ateliers du Champ Libre",
   "lang": "fr-CA",
   "start_url": "./",
   "scope": "./",

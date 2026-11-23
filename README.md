@@ -1,4 +1,4 @@
-# Soupers · Ateliers du Champ Libre
+# AU MENU · Ateliers du Champ Libre
 
 Web app installable (iPhone) pour planifier les soupers, gérer l'inventaire du congélateur et partager des recettes entre amis.
 

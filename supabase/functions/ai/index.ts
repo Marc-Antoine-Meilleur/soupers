@@ -1,4 +1,4 @@
-// Soupers · Ateliers du Champ Libre — fonction serveur IA (Supabase Edge Function, Deno)
+// AU MENU · Ateliers du Champ Libre — fonction serveur IA (Supabase Edge Function, Deno)
 // Actions : import_url, import_file, import_text, plan_week, shopping_list
 // Secrets : ANTHROPIC_API_KEY (obligatoire), ALLOWED_ORIGINS (ex. https://moncompte.github.io)
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -30,6 +30,44 @@ function publicKey(): string {
     if (typeof first === "string") return first;
   } catch { /* ignore */ }
   throw new Error("Clé publique Supabase introuvable");
+}
+
+// Clé secrète (serveur seulement) : sert uniquement à écrire le journal des coûts
+function secretKey(): string | null {
+  const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (legacy) return legacy;
+  try {
+    const keys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}");
+    const first = Object.values(keys)[0];
+    if (typeof first === "string") return first;
+  } catch { /* ignore */ }
+  return null;
+}
+
+// Prix en $ US par million de tokens [entrée, sortie] (platform.claude.com, novembre 2026)
+const PRICES: Record<string, [number, number]> = {
+  "claude-sonnet-5-5": [2, 10],
+  "claude-haiku-5-5": [0.10, 0.50],
+};
+const priceOf = (model: string, inTok: number, outTok: number) => {
+  const [pi, po] = PRICES[model] ?? [2, 10];
+  return (inTok * pi + outTok * po) / 1_000_000;
+};
+
+// Contexte de la requête en cours, pour le journal des coûts
+type Ctx = { userId: string; userName: string | null; householdId: string; action: string };
+let current: Ctx | null = null;
+async function logCall(model: string, usage: any) {
+  const key = secretKey();
+  if (!key || !current) return;
+  const inTok = (usage?.input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0) + (usage?.cache_read_input_tokens ?? 0);
+  const outTok = usage?.output_tokens ?? 0;
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, key, { auth: { persistSession: false } });
+  const { error } = await admin.from("ai_calls").insert({
+    user_id: current.userId, user_name: current.userName, household_id: current.householdId, action: current.action,
+    model, input_tokens: inTok, output_tokens: outTok, cost_usd: priceOf(model, inTok, outTok),
+  });
+  if (error) console.error("journal des coûts", error.message);
 }
 
 const CATEGORIES = [
@@ -65,6 +103,7 @@ async function claude(model: string, system: string, content: unknown, maxTokens
     throw new UserError("Service IA temporairement indisponible.");
   }
   const data = await res.json();
+  await logCall(model, data.usage);
   const text = (data.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n");
   return parseJson(text);
 }
@@ -199,7 +238,7 @@ Deno.serve(async (req) => {
     });
     const { data: { user } } = await supabase.auth.getUser(authHeader.slice(7));
     if (!user) return json({ error: "Session expirée, reconnectez-vous." }, 401);
-    const { data: profile } = await supabase.from("profiles").select("household_id").eq("id", user.id).single();
+    const { data: profile } = await supabase.from("profiles").select("household_id,display_name").eq("id", user.id).single();
     if (!profile?.household_id) return json({ error: "Aucun foyer" }, 403);
     const householdId: string = profile.household_id;
 
@@ -210,6 +249,8 @@ Deno.serve(async (req) => {
     if (!["import_url", "import_file", "import_text", "plan_week", "shopping_list"].includes(action)) {
       return json({ error: "Action inconnue" }, 400);
     }
+
+    current = { userId: user.id, userName: profile.display_name ?? null, householdId, action };
 
     // Quota quotidien par foyer (protège contre les coûts imprévus)
     const { data: ok } = await supabase.rpc("consume_ai_quota");
@@ -250,15 +291,28 @@ Deno.serve(async (req) => {
     if (action === "plan_week") {
       const dates = (Array.isArray(body.dates) ? body.dates : []).filter((d: unknown) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 7);
       if (!dates.length) throw new UserError("Aucun soir sélectionné.");
-      const [{ data: hh }, { data: recipes }, { data: inventory }, { data: pastPlans }] = await Promise.all([
+      const [{ data: hh }, { data: recipes }, { data: inventory }, { data: pastPlans }, { data: reviews }, { data: favs }] = await Promise.all([
         supabase.from("households").select("settings").eq("id", householdId).single(),
-        supabase.from("recipes").select("id,title,prep_minutes,tags,ingredients,health_notes,rating,household_id").limit(400),
+        supabase.from("recipes").select("id,title,prep_minutes,tags,ingredients,health_notes,household_id").limit(400),
         supabase.from("inventory_items").select("name,quantity,unit,location,best_before,added_on").limit(300),
         supabase.from("meal_plans").select("week_start,days").order("week_start", { ascending: false }).limit(4),
+        supabase.from("recipe_reviews").select("recipe_id,taste,minutes").limit(3000),
+        supabase.from("recipe_prefs").select("recipe_id,kind,user_id"),
       ]);
       const s = hh?.settings ?? {};
-      const catalog = (recipes ?? []).map((r: any) => ({
-        id: r.id, t: r.title, min: r.prep_minutes, tags: r.tags, note: r.rating ? `${r.rating}/5` : undefined,
+      const stats = new Map<string, { t: number[]; m: number[] }>();
+      for (const rv of reviews ?? []) {
+        const x = stats.get(rv.recipe_id) ?? { t: [], m: [] };
+        if (rv.taste != null) x.t.push(rv.taste);
+        if (rv.minutes != null) x.m.push(rv.minutes);
+        stats.set(rv.recipe_id, x);
+      }
+      const avg = (a: number[]) => (a.length ? Math.round((a.reduce((p, c) => p + c, 0) / a.length) * 10) / 10 : undefined);
+      const favSet = new Set((favs ?? []).filter((f: any) => f.kind === "favori").map((f: any) => f.recipe_id));
+      const blocked = new Set((favs ?? []).filter((f: any) => f.kind === "bloquee").map((f: any) => f.recipe_id));
+      const catalog = (recipes ?? []).filter((r: any) => !blocked.has(r.id)).map((r: any) => ({
+        id: r.id, t: r.title, min: avg(stats.get(r.id)?.m ?? []) ?? r.prep_minutes, tags: r.tags,
+        note: avg(stats.get(r.id)?.t ?? []), avis: stats.get(r.id)?.t.length || undefined, favori: favSet.has(r.id) || undefined,
         mine: r.household_id === householdId, sante: r.health_notes,
         ing: (r.ingredients ?? []).map((i: any) => i.name).slice(0, 15),
       }));
@@ -269,7 +323,7 @@ Réponds UNIQUEMENT avec un JSON valide :
 {"summary": string (2 phrases max), "days": [{"date": "YYYY-MM-DD", "recipe_id": string|null, "title": string, "minutes": number, "reason": string (courte, ex: "utilise le porc haché du congélateur"), "uses_inventory": [string], "new_recipe": null | ${RECIPE_SCHEMA}}]}
 Règles :
 - Un souper par date fournie, dans l'ordre.
-- Priorise les recettes du catalogue (recipe_id = leur id). Les recettes "mine": true sont celles du foyer; une note élevée = favorite.
+- Priorise les recettes du catalogue (recipe_id = leur id). "mine": true = recettes du foyer; "favori": true = favorite d'un membre du foyer (les recettes bloquées par un membre sont déjà retirées du catalogue); "note" = moyenne des avis du groupe sur 5 (privilégie les bien notées, évite celles sous 2,5); "min" = temps réel moyen rapporté.
 - Si le catalogue ne suffit pas pour la variété ou les critères, invente une nouvelle recette complète dans "new_recipe" (recipe_id null).
 - Utilise en priorité l'inventaire, surtout ce qui approche de sa date limite ou est congelé depuis longtemps.
 - Respecte les temps max (semaine vs fin de semaine), les critères santé, les aliments à éviter (allergies) sans exception.
@@ -309,14 +363,14 @@ Règles :
       const s = hh?.settings ?? {};
       const meals = (plan.days ?? []).map((d: any) => {
         const r = (recipes ?? []).find((x: any) => x.id === d.recipe_id);
-        return { souper: d.title, portions_recette: r?.servings ?? d.new_recipe?.servings, ingredients: r?.ingredients ?? d.new_recipe?.ingredients ?? [] };
+        return { souper: d.title, portions_recette: r?.servings ?? d.new_recipe?.servings, portions_voulues: d.servings ?? s.servings, ingredients: r?.ingredients ?? d.new_recipe?.ingredients ?? [] };
       });
       const system = `Tu prépares la liste d'épicerie d'un foyer québécois à partir des soupers de la semaine.
 Réponds UNIQUEMENT avec un JSON valide :
 {"items": [{"name": string, "quantity": string (ex: "2 kg", "3", "1 boîte"), "category": une de ${JSON.stringify(CATEGORIES)}, "store": string}],
  "from_inventory": [{"inventory_id": string, "name": string, "take": number (quantité à retirer, dans l'unité de l'inventaire), "unit": string, "location": string}]}
 Règles :
-- Additionne les ingrédients identiques entre recettes. Ajuste aux portions du foyer.
+- Pour chaque souper, ajuste les quantités : quantité × portions_voulues ÷ portions_recette. Puis additionne les ingrédients identiques entre recettes.
 - Retire ce qui est déjà dans l'inventaire en quantité suffisante et indique-le dans from_inventory avec son inventory_id.
 - Ignore les essentiels de base (sel, poivre, huile, eau) sauf grande quantité.
 - "store" : utilise la correspondance catégorie → épicerie; sinon la première épicerie de la liste.`;

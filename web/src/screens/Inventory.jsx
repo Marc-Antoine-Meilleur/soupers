@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase, LOCATIONS, CATEGORIES, today, daysBetween, parseQuick, guessCategory } from '../lib'
+import { supabase, LOCATIONS, CATEGORIES, today, daysBetween, parseQuick, guessCategory, parseTable, parseDate, parseQtyUnit, normLocation } from '../lib'
 import { FeedbackButton } from '../shared'
 import { useApp } from '../App'
 import { Icon, Sheet, Spinner, Empty, Header, Field, Segmented } from '../ui'
@@ -24,6 +24,7 @@ export default function Inventory() {
   const [loc, setLoc] = useState('Congélateur')
   const [editing, setEditing] = useState(null)
   const [quick, setQuick] = useState('')
+  const [pasting, setPasting] = useState(false)
 
   // Ajout rapide : « 2 paquets porc haché » — plusieurs articles séparés par des retours de ligne ou des « ; »
   const quickAdd = async (e) => {
@@ -61,7 +62,7 @@ export default function Inventory() {
   return (
     <>
       <Header title="Inventaire" sub="Ce que vous avez déjà à la maison"
-        action={<div className="head-actions"><FeedbackButton screen="Inventaire" /><button className="btn sm" onClick={() => setEditing({ location: loc, quantity: 1, added_on: today() })}>Détaillé</button></div>} />
+        action={<div className="head-actions"><FeedbackButton screen="Inventaire" /><button className="btn sm" onClick={() => setPasting(true)}><Icon name="table" size={16} /> Excel</button><button className="icon-btn" onClick={() => setEditing({ location: loc, quantity: 1, added_on: today() })} aria-label="Ajout détaillé"><Icon name="edit" /></button></div>} />
       <Segmented value={loc} onChange={setLoc} options={LOCATIONS.map((l) => [l, `${l.replace('Réfrigérateur', 'Frigo')}${counts[l] ? ` (${counts[l]})` : ''}`])} />
       <form className="quickbar" onSubmit={quickAdd}>
         <input value={quick} onChange={(e) => setQuick(e.target.value)} placeholder={`Ajout rapide : 2 paquets porc haché`} aria-label={`Ajouter au ${loc.toLowerCase()}`} enterKeyHint="done" />
@@ -89,6 +90,7 @@ export default function Inventory() {
           ))}
         </ul>
       )}
+      {pasting && <PasteImport defaultLocation={loc} onClose={() => setPasting(false)} onDone={(n) => { setPasting(false); load(); toast(`${n} article(s) importé(s)`) }} />}
       {editing && <ItemEditor item={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
     </>
   )
@@ -138,6 +140,131 @@ function ItemEditor({ item, onClose, onSaved }) {
         <Field label="Meilleur avant"><input type="date" value={f.best_before || ''} onChange={(e) => set('best_before', e.target.value)} /></Field>
       </div>
       <Field label="Notes"><input value={f.notes || ''} onChange={(e) => set('notes', e.target.value)} placeholder="ex. déjà mariné" /></Field>
+    </Sheet>
+  )
+}
+
+// ---------- Importer un tableau collé depuis Excel, Google Sheets ou les réponses d'un Google Form ----------
+const FIELDS = [
+  ['ignore', '— Ignorer —'], ['name', 'Aliment'], ['quantity', 'Quantité'], ['unit', 'Unité'], ['qty_unit', 'Quantité + unité (ex. 500 g)'],
+  ['location', 'Emplacement'], ['category', 'Catégorie'], ['added_on', "Date d'entrée"], ['best_before', 'Meilleur avant'], ['notes', 'Notes'],
+]
+const TEMPLATE = "Aliment\tQuantité\tUnité\tEmplacement\tDate d'entrée\tMeilleur avant\tNotes"
+
+function guessField(header, values) {
+  const h = (header || '').toLowerCase()
+  if (/horodat|timestamp|adresse e-mail|courriel|email/.test(h)) return 'ignore'
+  if (/meilleur|expir|p[ée]remption|best|consommer/.test(h)) return 'best_before'
+  if (/date|entr[ée]|congel[ée] le|achat/.test(h)) return 'added_on'
+  if (/unit[ée]/.test(h)) return 'unit'
+  if (/quantit|qt[ée]|qty|nombre|poids|gramme|kilo|\(g\)|\(kg\)/.test(h)) {
+    return values.some((v) => /\d\s*[a-zA-Zé]/.test(v)) ? 'qty_unit' : 'quantity'
+  }
+  if (/emplacement|lieu|endroit|o[uù]|location|rangement/.test(h)) return 'location'
+  if (/cat[ée]gor|type|rayon/.test(h)) return 'category'
+  if (/note|comment|remarque/.test(h)) return 'notes'
+  if (/aliment|item|produit|nom|article|description|quoi/.test(h)) return 'name'
+  return null
+}
+
+function PasteImport({ defaultLocation, onClose, onDone }) {
+  const { toast } = useApp()
+  const [text, setText] = useState('')
+  const [hasHeader, setHasHeader] = useState(true)
+  const [map, setMap] = useState(null)
+  const [location, setLocation] = useState(defaultLocation)
+  const [busy, setBusy] = useState(false)
+  const rows = parseTable(text)
+  const width = Math.max(0, ...rows.map((r) => r.length))
+  const header = hasHeader ? rows[0] || [] : []
+  const body = hasHeader ? rows.slice(1) : rows
+
+  // Correspondance automatique des colonnes, modifiable ensuite
+  const auto = () => {
+    const used = new Set()
+    return Array.from({ length: width }, (_, c) => {
+      const vals = body.slice(0, 20).map((r) => r[c] || '')
+      let f = guessField(header[c], vals)
+      if (!f) {
+        if (vals.every((v) => !v || parseDate(v))) f = used.has('added_on') ? 'best_before' : 'added_on'
+        else if (vals.every((v) => !v || /^\d+([.,]\d+)?$/.test(v))) f = 'quantity'
+        else if (vals.some((v) => /^\d+([.,]\d+)?\s*[a-zA-Zé]/.test(v))) f = 'qty_unit'
+        else f = used.has('name') ? 'notes' : 'name'
+      }
+      if (f !== 'ignore' && used.has(f)) f = 'ignore'
+      used.add(f)
+      return f
+    })
+  }
+  const mapping = map && map.length === width ? map : auto()
+
+  const items = body.map((r) => {
+    const it = { location, added_on: today() }
+    mapping.forEach((f, c) => {
+      const v = (r[c] || '').trim()
+      if (!v || f === 'ignore') return
+      if (f === 'name') it.name = v.slice(0, 120)
+      if (f === 'quantity') it.quantity = Number(v.replace(',', '.')) || it.quantity
+      if (f === 'unit') it.unit = v.slice(0, 40)
+      if (f === 'qty_unit') { const q = parseQtyUnit(v); it.quantity = q.quantity ?? it.quantity; it.unit = q.unit?.slice(0, 40) ?? it.unit }
+      if (f === 'location') it.location = normLocation(v, location)
+      if (f === 'category') it.category = CATEGORIES.find((c) => c.toLowerCase().startsWith(v.toLowerCase().slice(0, 5))) || null
+      if (f === 'added_on') it.added_on = parseDate(v) || it.added_on
+      if (f === 'best_before') it.best_before = parseDate(v)
+      if (f === 'notes') it.notes = v.slice(0, 500)
+    })
+    if (it.quantity === undefined || it.quantity === null) it.quantity = 1
+    if (!it.category && it.name) it.category = guessCategory(it.name)
+    return it
+  }).filter((it) => it.name)
+
+  const doImport = async () => {
+    setBusy(true)
+    for (let i = 0; i < items.length; i += 200) {
+      const { error } = await supabase.from('inventory_items').insert(items.slice(i, i + 200))
+      if (error) { setBusy(false); return toast('Erreur : ' + error.message) }
+    }
+    onDone(items.length)
+  }
+  const copyTemplate = async () => { await navigator.clipboard.writeText(TEMPLATE); toast('En-tête copié : collez-le dans la 1re ligne de votre feuille') }
+
+  return (
+    <Sheet title="Importer depuis Excel ou Google" onClose={onClose}
+      footer={items.length > 0 && <button className="btn primary block" disabled={busy} onClick={doImport}>{busy ? '…' : `Importer ${items.length} article${items.length > 1 ? 's' : ''}`}</button>}>
+      <p className="muted small">Dans Excel, Google Sheets ou la feuille de réponses d'un Google Form : sélectionnez les lignes (avec la ligne de titres), copiez, puis collez ici.</p>
+      <textarea className="paste" rows={5} value={text} onChange={(e) => { setText(e.target.value); setMap(null) }} placeholder={"Aliment\tQuantité\tDate\nPoulet\t2 kg\t2026-11-20"} />
+      <div className="two">
+        <label className="switch"><input type="checkbox" checked={hasHeader} onChange={(e) => { setHasHeader(e.target.checked); setMap(null) }} /><span>1re ligne = titres</span></label>
+        <button className="btn sm" onClick={copyTemplate}><Icon name="copy" size={16} /> Copier un modèle</button>
+      </div>
+      {width > 0 && (
+        <>
+          <Field label="Emplacement si la colonne est absente">
+            <select value={location} onChange={(e) => setLocation(e.target.value)}>{LOCATIONS.map((l) => <option key={l}>{l}</option>)}</select>
+          </Field>
+          <h3>Correspondance des colonnes</h3>
+          <div className="map-list">
+            {mapping.map((f, c) => (
+              <label key={c}><span>{header[c] || `Colonne ${c + 1}`} <small className="muted">ex. {body[0]?.[c] || '—'}</small></span>
+                <select value={f} onChange={(e) => { const m = [...mapping]; m[c] = e.target.value; setMap(m) }}>
+                  {FIELDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+          <h3>Aperçu ({items.length})</h3>
+          <div className="table-wrap">
+            <table className="preview">
+              <thead><tr><th>Aliment</th><th>Qté</th><th>Lieu</th><th>Entré</th><th>Avant</th></tr></thead>
+              <tbody>{items.slice(0, 8).map((it, k) => (
+                <tr key={k}><td>{it.name}</td><td>{it.quantity} {it.unit || ''}</td><td>{it.location.replace('Réfrigérateur', 'Frigo')}</td><td>{it.added_on}</td><td>{it.best_before || '—'}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+          {items.length > 8 && <p className="muted small">… et {items.length - 8} autres</p>}
+          {!mapping.includes('name') && <p className="note err">Choisissez la colonne « Aliment ».</p>}
+        </>
+      )}
     </Sheet>
   )
 }

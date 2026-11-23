@@ -26,6 +26,12 @@ const PATHS = {
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
   copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
   chat: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z',
+  heart: 'M12 20s-7-4.4-9.2-8.6C1.2 8.3 3 4.5 6.6 4.5c2 0 3.4 1.1 4.4 2.6 1-1.5 2.4-2.6 4.4-2.6 3.6 0 5.4 3.8 3.8 6.9C19 15.6 12 20 12 20z',
+  chef: 'M7 14v6h10v-6M6 14a4 4 0 1 1 1.5-7.7A5 5 0 0 1 16.5 6.3 4 4 0 1 1 18 14z',
+  history: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2',
+  table: 'M4 5h16v14H4zM4 10h16M4 15h16M10 5v14',
+  shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+  download: 'M12 3v12M7 10l5 5 5-5M4 19h16',
   paste: 'M9 4h6v3H9zM8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2',
 }
 
@@ -37,14 +43,14 @@ export function Icon({ name, size = 22, fill = 'none', className }) {
   )
 }
 
-export function Sheet({ title, onClose, children, footer }) {
+export function Sheet({ title, onClose, children, footer, full }) {
   useEffect(() => {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
   }, [])
   return (
     <div className="sheet-bg" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+      <div className={`sheet ${full ? 'full' : ''}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
         <div className="sheet-head">
           <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Fermer"><Icon name="close" /></button>
@@ -72,7 +78,7 @@ export function Header({ title, sub, action }) {
   return (
     <header className="page-head">
       <div>
-        <div className="brand-bar"><img src="./brand/barn.png" alt="" />Ateliers du Champ Libre</div>
+        <div className="brand-bar"><img src="./brand/barn.png" alt="" />AU MENU · Champ Libre</div>
         <h1>{title}</h1>
         {sub && <p className="sub">{sub}</p>}
       </div>

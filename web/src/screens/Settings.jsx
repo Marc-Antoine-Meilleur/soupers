@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
-import { supabase, CATEGORIES, DEMO, APP_VERSION, today, fmtDay } from '../lib'
+import { supabase, CATEGORIES, DEMO, APP_VERSION, fmtDay } from '../lib'
 import { resetDemo } from '../mock'
 import { useApp } from '../App'
 import { CriteriaForm, FeedbackButton } from '../shared'
 import { Icon, Header, Field } from '../ui'
 
 export default function Settings() {
-  const { household, profile, saveSettings, toast, session, reload } = useApp()
+  const { household, profile, saveSettings, toast, session, reload, go } = useApp()
+  const [pw, setPw] = useState('')
   const s = household.settings
   const [members, setMembers] = useState([])
   const [feedback, setFeedback] = useState([])
-  const [usage, setUsage] = useState(0)
   const [newStore, setNewStore] = useState('')
   const [name, setName] = useState(profile.display_name || '')
   const [code, setCode] = useState(household.invite_code)
@@ -18,11 +18,10 @@ export default function Settings() {
   useEffect(() => {
     supabase.from('profiles').select('id,display_name').eq('household_id', household.id).then(({ data }) => setMembers(data || []))
     supabase.from('feedback').select('*').order('created_at', { ascending: false }).limit(100).then(({ data }) => setFeedback(data || []))
-    supabase.from('ai_usage').select('calls').eq('day', today()).maybeSingle().then(({ data }) => setUsage(data?.calls || 0))
   }, [household.id])
 
   const invite = async () => {
-    const text = `Rejoins notre foyer dans l'app Soupers des Ateliers du Champ Libre! Ouvre ${location.origin}${location.pathname} dans Safari, crée ton compte, puis entre le code : ${code}`
+    const text = `Rejoins notre foyer dans l'app AU MENU des Ateliers du Champ Libre! Ouvre ${location.origin}${location.pathname} dans Safari, crée ton compte, puis entre le code : ${code}`
     if (navigator.share) { try { await navigator.share({ text }) } catch { /* annulé */ } }
     else { await navigator.clipboard.writeText(text); toast('Invitation copiée') }
   }
@@ -43,7 +42,7 @@ export default function Settings() {
   }
   const copyFeedback = async () => {
     const open = feedback.filter((f) => !f.done)
-    const text = `Commentaires sur l'app Soupers (v${APP_VERSION}) :\n\n` +
+    const text = `Commentaires sur l'app AU MENU (v${APP_VERSION}) :\n\n` +
       open.map((f) => `- [${f.screen || '?'}] ${f.message} (${f.author_name || ''}, ${f.created_at.slice(0, 10)}, v${f.app_version || '?'})`).join('\n')
     await navigator.clipboard.writeText(text)
     toast(`${open.length} commentaire(s) copié(s) — collez-les dans Claude`)
@@ -59,6 +58,11 @@ export default function Settings() {
   return (
     <>
       <Header title="Réglages" action={<FeedbackButton screen="Réglages" />} />
+      {profile.is_admin && (
+        <button className="card admin-link" onClick={() => go('admin')}>
+          <Icon name="shield" /><span><b>Administration</b><small>Utilisateurs, coûts de l'IA, sauvegarde</small></span><Icon name="next" size={18} />
+        </button>
+      )}
 
       <section className="card">
         <h2>Critères des soupers</h2>
@@ -116,7 +120,6 @@ export default function Settings() {
           <button className="btn" onClick={rotate}><Icon name="refresh" size={18} /> Nouveau code</button>
         </div>
         <ul className="plain">{members.map((m) => <li key={m.id}><Icon name="users" size={16} /> {m.display_name}{m.id === session.user.id ? ' (vous)' : ''}</li>)}</ul>
-        <p className="usage">Utilisation de l'IA aujourd'hui : {usage} requête{usage > 1 ? 's' : ''} (limite quotidienne de sécurité : 40)</p>
       </section>
 
       <section className="card">
@@ -124,6 +127,11 @@ export default function Settings() {
         <Field label="Prénom affiché"><input maxLength={60} value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <button className="btn sm" onClick={saveName} disabled={!name.trim()}>Enregistrer</button>
         <p className="small muted">{session.user.email}</p>
+        <h3>Changer mon mot de passe</h3>
+        <div className="inline-add">
+          <input type="password" autoComplete="new-password" placeholder="Nouveau (8 caractères ou plus)" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <button className="btn sm" disabled={pw.length < 8} onClick={async () => { const { error } = await supabase.auth.updateUser({ password: pw }); if (error) toast('Erreur : ' + error.message); else { setPw(''); toast('Mot de passe changé') } }}>Changer</button>
+        </div>
       </section>
 
       <section className="card">
@@ -140,7 +148,7 @@ export default function Settings() {
         <button className="btn danger block" onClick={leave}>Quitter ce foyer</button>
         {DEMO && <button className="btn block" onClick={() => { resetDemo(); location.reload() }}>Réinitialiser la démo</button>}
       </div>
-      <p className="version">Soupers · Ateliers du Champ Libre · v{APP_VERSION}</p>
+      <p className="version">AU MENU · Ateliers du Champ Libre · v{APP_VERSION}</p>
     </>
   )
 }

@@ -6,5 +6,6 @@ $B/initdb -D $D -A trust >/dev/null && $B/pg_ctl -D $D -o "-p 5499 -k $D" -l $D/
 P="psql -h $D -p 5499 -U $(whoami) -d postgres -q"
 $P -v ON_ERROR_STOP=1 -f supabase/tests/00_stub_supabase.sql 2>/dev/null
 $P -v ON_ERROR_STOP=1 -f supabase/migrations/*_init.sql 2>&1 | grep -v NOTICE || true
-$P -f supabase/tests/01_securite_rls.sql 2>&1 | grep -v "^$\|CONTEXT\|^LINE\|^\s*\^"
+for m in supabase/migrations/*_v*.sql; do $P -v ON_ERROR_STOP=1 -f "$m" 2>&1 | grep -v NOTICE || true; done
+for t in supabase/tests/0[1-9]_*.sql; do $P -f "$t" 2>&1 | grep -v "^$\|CONTEXT\|^LINE\|^\s*\^"; done
 $B/pg_ctl -D $D stop >/dev/null

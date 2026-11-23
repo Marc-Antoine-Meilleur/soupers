@@ -1,4 +1,4 @@
-# Revue — Soupers · Ateliers du Champ Libre (v1.0.0, 22 novembre 2026)
+# Revue — AU MENU · Ateliers du Champ Libre (v1.0.0, 22 novembre 2026)
 
 Revue faite par Claude (IA). Elle ne remplace pas un audit de sécurité professionnel ni un avis juridique.
 
@@ -73,3 +73,16 @@ Changements faits pour réduire les manipulations :
 - **Contraintes** : bouton « Critères » directement dans l'écran Semaine. Un champ « Cette semaine, quelque chose de spécial? » sert aux exceptions.
 - **Acceptation** : un bouton « Approuver » crée la liste d'épicerie classée par magasin. Ensuite, toucher « Sorti » sur un aliment met l'inventaire à jour automatiquement.
 - **Itérations** : bouton de commentaire 💬 sur chaque écran. Réglages → Commentaires → « Copier » pour me les transmettre.
+
+## 5. Version 1.1 (23 novembre 2026) : ajouts et contrôles
+
+- **Comptes** : seul l'administrateur crée les comptes. Chaque compte reçoit un mot de passe temporaire, à changer obligatoirement à la première connexion. L'inscription libre est désactivée.
+- **Rôle admin** : impossible à s'attribuer par l'API. Le champ n'est modifiable que par SQL ou par la clé secrète du serveur. La fonction `admin` vérifie ce rôle à chaque appel.
+- **Coûts de l'IA** : chaque appel est journalisé par le serveur (personne, foyer, fonction, modèle, tokens et coût estimé). Le journal est lisible par l'admin seulement.
+- **Avis et préférences** :
+  - un avis n'est visible que par les personnes qui voient la recette ;
+  - les favoris et les blocages sont personnels et visibles seulement par le foyer ;
+  - une recette bloquée n'est jamais proposée au foyer.
+- **Sauvegarde** : un export JSON complet est réservé à l'admin. Il contient les courriels : conservez-le en lieu sûr.
+- **Historique des menus** : conservé 12 mois, puis supprimé automatiquement.
+- **Tests de sécurité** : 38 vérifications au total (21 de la v1.0 et 17 nouvelles), toutes réussies.

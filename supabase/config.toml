@@ -4,3 +4,6 @@ project_id = "soupers-champ-libre"
 # compatible avec les nouvelles clés de signature JWT de Supabase.
 [functions.ai]
 verify_jwt = false
+
+[functions.admin]
+verify_jwt = false

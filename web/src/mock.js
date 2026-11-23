@@ -38,6 +38,8 @@ function seed() {
     shopping_items: [],
     feedback: [],
     ai_usage: [],
+    recipe_reviews: [],
+    recipe_prefs: [],
   }
 }
 
@@ -52,6 +54,8 @@ function visible(table) {
   const hh = myHH()
   if (table === 'recipes') return rows.filter((r) => r.household_id === hh || r.shared)
   if (table === 'profiles') return rows
+  if (table === 'recipe_reviews') { const ids = new Set(visible('recipes').map((r) => r.id)); return rows.filter((r) => ids.has(r.recipe_id)) }
+  if (table === 'recipe_prefs') return rows.filter((r) => r.user_id === db.session?.user.id)
   if (table === 'households') return rows.filter((r) => r.id === hh)
   return rows.filter((r) => r.household_id === hh)
 }
@@ -62,6 +66,8 @@ class Query {
   eq(c, v) { this.filters.push((r) => r[c] === v); return this }
   neq(c, v) { this.filters.push((r) => r[c] !== v); return this }
   in(c, vs) { this.filters.push((r) => vs.includes(r[c])); return this }
+  lt(c, v) { this.filters.push((r) => r[c] < v); return this }
+  gt(c, v) { this.filters.push((r) => r[c] > v); return this }
   order(c, o = {}) { this._order = [c, o.ascending !== false]; return this }
   limit(n) { this._limit = n; return this }
   single() { this._single = true; return this }
@@ -76,7 +82,7 @@ class Query {
     const match = (r) => this.filters.every((f) => f(r))
     let out = []
     const hh = myHH()
-    const defaults = () => ({ id: uid(), household_id: hh, created_at: new Date().toISOString() })
+    const defaults = () => ({ id: uid(), household_id: hh, user_id: db.session?.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     if (this.op === 'select') out = visible(t).filter(match)
     if (this.op === 'insert') { out = this.rows.map((r) => ({ ...defaults(), ...r })); db[t].push(...out) }
     if (this.op === 'upsert') {
@@ -152,7 +158,8 @@ export function createMock() {
         await wait(200)
         const id = 'demo-user'
         db.session = { user: { id, email } }
-        if (!db.profiles.find((p) => p.id === id)) db.profiles.push({ id, display_name: email.split('@')[0], household_id: 'demo-foyer' })
+        if (!db.profiles.find((p) => p.id === id)) db.profiles.push({ id, display_name: email.split('@')[0], household_id: 'demo-foyer', is_admin: true })
+        db.session.user.user_metadata = {}
         save(); emit('SIGNED_IN'); return { data: { session: db.session }, error: null }
       },
       async signUp({ email, options }) {
@@ -162,6 +169,7 @@ export function createMock() {
       },
       async signOut() { db.session = null; save(); emit('SIGNED_OUT'); return { error: null } },
       async resetPasswordForEmail() { return { error: null } },
+      async updateUser({ data }) { if (data) db.session.user.user_metadata = { ...db.session.user.user_metadata, ...data }; save(); emit('USER_UPDATED'); return { data: { user: db.session.user }, error: null } },
     },
     storage: {
       from: () => ({
@@ -171,8 +179,29 @@ export function createMock() {
       }),
     },
     functions: {
-      async invoke(_name, { body }) {
-        await wait(900)
+      async invoke(name, { body }) {
+        await wait(name === 'admin' ? 300 : 900)
+        if (name === 'admin') {
+          if (body.action === 'overview') {
+            const now = Date.now()
+            const calls = Array.from({ length: 40 }, (_, i) => {
+              const a = ['plan_week', 'shopping_list', 'import_file', 'import_url'][i % 4]
+              const big = a === 'plan_week'
+              const inT = big ? 22000 : 4000, outT = big ? 3000 : 1200
+              return { created_at: new Date(now - i * 4 * 86400000).toISOString(), user_id: i % 3 ? 'demo-user' : 'ami-1', user_name: i % 3 ? 'Moi' : 'Julie',
+                household_id: i % 3 ? 'demo-foyer' : 'autre', action: a, model: big ? 'claude-sonnet-5-5' : 'claude-haiku-5-5', input_tokens: inT, output_tokens: outT,
+                cost_usd: big ? (inT * 2 + outT * 10) / 1e6 : (inT * 0.1 + outT * 0.5) / 1e6 }
+            })
+            return { data: { users: [
+              { id: 'demo-user', email: 'vous@exemple.com', display_name: 'Moi', household_id: 'demo-foyer', is_admin: true, last_sign_in_at: new Date().toISOString() },
+              { id: 'ami-1', email: 'julie@exemple.com', display_name: 'Julie', household_id: 'autre', is_admin: false, must_change_password: true },
+            ], households: [{ id: 'demo-foyer', name: 'Foyer démo' }, { id: 'autre', name: 'Famille de Julie' }], calls,
+            config: { credits_usd: 5, ai_daily_limit: 40, group_code: 'CHAMP-DEMO' }, usage_today: [{ household_id: 'demo-foyer', calls: 3 }] }, error: null }
+          }
+          if (body.action === 'create_user' || body.action === 'reset_password') return { data: { password: 'Demo7kQp2mXa', user_id: 'x' }, error: null }
+          if (body.action === 'backup') return { data: { format: 'au-menu-backup', demo: true, ...db }, error: null }
+          return { data: { ok: true }, error: null }
+        }
         if (body.action === 'plan_week') return { data: { plan: fakePlan(body.dates) }, error: null }
         if (body.action.startsWith('import_')) return { data: { recipe: {
           title: 'Pâté chinois revisité', description: 'Version démo extraite automatiquement.', servings: 6, prep_minutes: 50,

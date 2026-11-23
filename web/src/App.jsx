@@ -7,6 +7,7 @@ import Recipes from './screens/Recipes'
 import Inventory from './screens/Inventory'
 import Shopping from './screens/Shopping'
 import Settings from './screens/Settings'
+import Admin from './screens/Admin'
 import { Icon } from './ui'
 
 const Ctx = createContext(null)
@@ -58,7 +59,7 @@ export default function App() {
 
   if (session === undefined) return <div className="splash"><img className="brand-logo" src="./brand/logo.png" alt="Ateliers du Champ Libre" /></div>
   if (!session) return <Auth />
-  if (recovering) return <NewPassword onDone={() => setRecovering(false)} />
+  if (recovering || session.user.user_metadata?.must_change_password) return <NewPassword first={!recovering} onDone={() => setRecovering(false)} />
   if (!profile) return <div className="splash"><img className="brand-logo" src="./brand/logo.png" alt="Ateliers du Champ Libre" /></div>
 
   const ctx = { session, profile, household, setProfile, reload: loadProfile, go, toast, saveSettings }
@@ -74,10 +75,11 @@ export default function App() {
             {tab === 'inventory' && <Inventory />}
             {tab === 'shopping' && <Shopping />}
             {tab === 'settings' && <Settings />}
+            {tab === 'admin' && (profile.is_admin ? <Admin /> : <Settings />)}
           </main>
           <nav className="tabbar">
             {TABS.map((t) => (
-              <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => go(t.id)}>
+              <button key={t.id} className={tab === t.id || (tab === 'admin' && t.id === 'settings') ? 'on' : ''} onClick={() => go(t.id)}>
                 <Icon name={t.icon} />
                 <span>{t.label}</span>
               </button>
