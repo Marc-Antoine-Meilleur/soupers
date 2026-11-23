@@ -1,0 +1,6 @@
+project_id = "soupers-champ-libre"
+
+# La vérification du jeton est faite DANS la fonction (supabase.auth.getUser),
+# compatible avec les nouvelles clés de signature JWT de Supabase.
+[functions.ai]
+verify_jwt = false
