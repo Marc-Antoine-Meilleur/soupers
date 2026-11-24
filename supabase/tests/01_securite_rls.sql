@@ -5,7 +5,7 @@ insert into auth.users values ('00000000-0000-0000-0000-00000000000a','a@x','{"d
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
 select 'A create:', (public.create_household('Foyer A','GROUPE-SECRET')).name;
-insert into public.recipes (title) values ('Recette privée A');
+insert into public.recipes (title, shared) values ('Recette privée A', false);
 insert into public.inventory_items (name) values ('Porc A');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
 select 'B create:', (public.create_household('Foyer B','GROUPE-SECRET')).name;

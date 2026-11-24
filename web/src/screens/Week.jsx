@@ -69,7 +69,7 @@ export default function Week() {
   // L'IA complète seulement les soirs encore vides
   const generate = async () => {
     const empty = planDays.filter((d) => !entries.some((e) => e.date === d))
-    if (!empty.length) return toast('Tous les soirs ont déjà un souper')
+    if (!empty.length) return toast('Tous les jours ont déjà quelque chose au menu')
     setBusy('all'); setErr(null); setAiFill(false)
     try {
       const { plan: p } = await ai('plan_week', { dates: empty, note, locked: entries.map((d) => ({ date: d.date, souper: d.title })) })
@@ -156,7 +156,7 @@ export default function Week() {
                 <li key={date} className={`card day ${date === today() ? 'is-today' : ''}`}>
                   <div className="day-date"><b>{fmtDay(date).split(' ')[0]}</b><span>{fmtDay(date).split(' ').slice(1).join(' ')}</span></div>
                   <div className="grow">
-                    {list.length === 0 && <button className="day-empty" onClick={() => setAdding(date)} disabled={isPast}>Ajouter un souper</button>}
+                    {list.length === 0 && <button className="day-empty" onClick={() => setAdding(date)} disabled={isPast}>Ajouter au menu</button>}
                     {list.map((d) => (
                       <div key={d.key} className="entry">
                         <div className="grow" onClick={() => openDay(d)}>
@@ -211,7 +211,7 @@ export default function Week() {
       {aiFill && (
         <Sheet title="Compléter avec Claude" onClose={() => setAiFill(false)}
           footer={<button className="btn primary block" onClick={generate}><Icon name="spark" size={18} /> Proposer {emptyCount} souper{emptyCount > 1 ? 's' : ''}</button>}>
-          <p className="muted">Claude choisit pour les soirs vides, dans vos recettes et celles des amis, en utilisant d'abord ce qui est au congélateur. Les soupers déjà choisis restent.</p>
+          <p className="muted">Claude choisit pour les soirs vides, dans vos recettes et celles de la communauté, en utilisant d'abord ce qui est au congélateur. Les soupers déjà choisis restent.</p>
           <p className="small muted">{s.servings} portions · max {s.max_minutes_weekday} min en semaine{(s.health || []).length > 0 && <> · {s.health.join(', ')}</>}
             {' '}<button className="link" onClick={() => { setAiFill(false); setCriteria(true) }}>Critères</button></p>
           <label className="field"><span>Quelque chose de spécial? (optionnel)</span>
@@ -260,7 +260,7 @@ function AddToDay({ date, recipes, data, onClose, onSwipe, onPick, onRecipe }) {
     try { const { _idea: _x, ...rest } = r; const saved = await saveRecipe(rest, profile.display_name); await onRecipe(saved) } catch (e) { toast('Erreur : ' + e.message) }
   }
   return (
-    <Sheet title={`Souper du ${fmtDay(date)}`} onClose={onClose}>
+    <Sheet title={`Menu du ${fmtDay(date)}`} onClose={onClose}>
       <button className="btn primary block" onClick={onSwipe}><Icon name="cards" size={18} /> Glisser des idées</button>
       <h3>Lien ou photo</h3>
       <QuickAdd compact onSaved={onRecipe} />
@@ -289,7 +289,7 @@ function AddToDay({ date, recipes, data, onClose, onSwipe, onPick, onRecipe }) {
       </ul>
       <h3>Autre chose</h3>
       <div className="quick">
-        {['Restes', 'Resto / livraison', 'Pas de souper'].map((t) => <button key={t} className="chip" onClick={() => free(t)}>{t}</button>)}
+        {['Restes', 'Resto / livraison', 'Rien de prévu'].map((t) => <button key={t} className="chip" onClick={() => free(t)}>{t}</button>)}
       </div>
       <div className="inline-add">
         <input placeholder="Texte libre…" value={custom} onChange={(e) => setCustom(e.target.value)} />
@@ -314,7 +314,7 @@ function History({ onClose, onOpen }) {
     .filter((p) => p.days.length)
   return (
     <Sheet title="Historique des menus" onClose={onClose}>
-      <div className="search"><Icon name="search" size={18} /><input placeholder="Retrouver un souper…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+      <div className="search"><Icon name="search" size={18} /><input placeholder="Retrouver un repas…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
       {!plans ? <Spinner /> : list.length === 0 ? <p className="muted">Aucun menu trouvé.</p> : list.map((p) => (
         <div key={p.week_start} className="hist-week">
           <h3>Semaine du {fmtLong(p.week_start)}</h3>

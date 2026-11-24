@@ -6,7 +6,7 @@ import { Icon, Sheet, Spinner, Header, Field } from '../ui'
 const usd = (n) => `${(n || 0).toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`
 const usd4 = (n) => `${(n || 0).toLocaleString('fr-CA', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} $`
 const tok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2).replace('.', ',')} M` : n >= 1e3 ? `${Math.round(n / 1e3)} k` : String(n || 0))
-const ACTIONS = { plan_week: 'Plans de semaine', shopping_list: "Listes d'épicerie", import_url: 'Import de liens', import_file: 'Import PDF/photos', import_text: 'Import de texte' }
+const ACTIONS = { plan_week: 'Plans de semaine', shopping_list: "Listes d'épicerie", import_url: 'Import de liens', import_file: 'Import PDF/photos', import_text: 'Import de texte', suggest: 'Idées de Claude', tag_recipes: 'Étiquetage' }
 
 export default function Admin() {
   const { go, toast, session } = useApp()
@@ -15,6 +15,8 @@ export default function Admin() {
   const [secret, setSecret] = useState(null)
   const [creating, setCreating] = useState(false)
   const [cfg, setCfg] = useState({})
+  const [deleting, setDeleting] = useState(null)
+  const [naming, setNaming] = useState(null) // { kind: 'household'|'community'|'rename', … }
 
   const load = async () => {
     try {
@@ -25,6 +27,7 @@ export default function Admin() {
   useEffect(() => { load() }, [])
 
   const hh = useMemo(() => Object.fromEntries((d?.households || []).map((h) => [h.id, h.name])), [d])
+  const hhById = useMemo(() => Object.fromEntries((d?.households || []).map((h) => [h.id, h])), [d])
   const fin = useMemo(() => {
     if (!d) return null
     const calls = d.calls || []
@@ -63,12 +66,31 @@ export default function Admin() {
     if (r?.password) setSecret({ title: 'Mot de passe temporaire', email: u.email, password: r.password })
   }
   const remove = async (u) => {
-    const ans = prompt(`Supprimer définitivement le compte de ${u.display_name || u.email}?\nSes recettes partagées seront conservées. Tapez SUPPRIMER pour confirmer.`)
-    if (ans !== 'SUPPRIMER') return
     const r = await act(() => adminCall('delete_user', { user_id: u.id }), 'Compte supprimé')
+    setDeleting(null)
     if (r?.moved_recipes) toast(`${r.moved_recipes} recette(s) partagée(s) conservée(s) dans votre foyer`)
   }
-  const move = (u, household_id) => act(() => adminCall('move_user', { user_id: u.id, household_id: household_id || null }), 'Foyer modifié')
+  const move = (u, household_id) => {
+    if (household_id === 'new') return setNaming({ kind: 'household', user: u })
+    return act(() => adminCall('move_user', { user_id: u.id, household_id: household_id || null }), 'Foyer modifié')
+  }
+  const setCommunity = (household_id, community_id) => {
+    if (community_id === 'new') return setNaming({ kind: 'community', household_id })
+    return act(() => adminCall('set_household_community', { household_id, community_id: community_id || null }), 'Communauté modifiée')
+  }
+  const saveName = async (name) => {
+    const n = naming
+    setNaming(null)
+    if (n.kind === 'household') {
+      const r = await act(() => adminCall('create_household', { name, community_id: n.community_id }))
+      if (r?.id && n.user) await act(() => adminCall('move_user', { user_id: n.user.id, household_id: r.id }), `Foyer « ${name} » créé`)
+      else if (r?.id) toast(`Foyer « ${name} » créé`)
+    } else if (n.kind === 'community') {
+      const r = await act(() => adminCall('create_community', { name }))
+      if (r?.id && n.household_id) await act(() => adminCall('set_household_community', { household_id: n.household_id, community_id: r.id }), `Communauté « ${name} » créée`)
+      else if (r?.id) toast(`Communauté « ${name} » créée`)
+    } else if (n.kind === 'rename') await act(() => adminCall('rename_community', { id: n.id, name }), 'Communauté renommée')
+  }
   const saveCfg = () => act(() => adminCall('set_config', cfg), 'Réglages enregistrés')
   const backup = async () => {
     try {
@@ -120,12 +142,12 @@ export default function Admin() {
       </section>
 
       <section className="card">
-        <h2>Réglages du groupe</h2>
+        <h2>Réglages</h2>
         <div className="two">
           <Field label="Crédits achetés au total ($ US)" hint="Pour estimer le solde restant"><input inputMode="decimal" value={cfg.credits_usd} onChange={(e) => setCfg({ ...cfg, credits_usd: e.target.value.replace(',', '.') })} /></Field>
           <Field label="Limite IA par foyer / jour" hint="Protection contre les abus"><input inputMode="numeric" value={cfg.ai_daily_limit} onChange={(e) => setCfg({ ...cfg, ai_daily_limit: e.target.value.replace(/\D/g, '') })} /></Field>
         </div>
-        <Field label="Code du groupe" hint="Permet à un utilisateur sans foyer d'en créer un"><input value={cfg.group_code} onChange={(e) => setCfg({ ...cfg, group_code: e.target.value })} /></Field>
+        <Field label="Code de la communauté" hint="Permet à un utilisateur sans foyer de créer le sien (placé dans la première communauté)"><input value={cfg.group_code} onChange={(e) => setCfg({ ...cfg, group_code: e.target.value })} /></Field>
         <button className="btn primary sm" onClick={saveCfg}>Enregistrer</button>
         {d.usage_today?.length > 0 && <p className="muted small">Aujourd'hui : {d.usage_today.map((u) => `${hh[u.household_id] || '?'} ${u.calls}`).join(' · ')}</p>}
       </section>
@@ -138,18 +160,56 @@ export default function Admin() {
               <div className="grow">
                 <b>{u.display_name || '—'}</b> {u.is_admin && <span className="pill violet">Admin</span>} {u.must_change_password && <span className="pill orange">Mot de passe temporaire</span>}
                 <small>{u.email} · dernière connexion : {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('fr-CA') : 'jamais'}</small>
-                <select className="mini wide" value={u.household_id || ''} onChange={(e) => move(u, e.target.value)}>
-                  <option value="">— Sans foyer —</option>
-                  {d.households.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-                </select>
+                <div className="assign">
+                  <label><small>Foyer</small>
+                    <select className="mini wide" value={u.household_id || ''} onChange={(e) => move(u, e.target.value)}>
+                      <option value="">— Sans foyer —</option>
+                      {d.households.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                      <option value="new">+ Nouveau foyer…</option>
+                    </select>
+                  </label>
+                  <label><small>Communauté du foyer</small>
+                    <select className="mini wide" disabled={!u.household_id} value={hhById[u.household_id]?.community_id || ''} onChange={(e) => setCommunity(u.household_id, e.target.value)}>
+                      <option value="">— Aucune —</option>
+                      {(d.communities || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      <option value="new">+ Nouvelle communauté…</option>
+                    </select>
+                  </label>
+                </div>
               </div>
               <div className="user-actions">
                 <button className="btn sm" onClick={() => resetPw(u)}>Mot de passe</button>
-                {u.id !== session.user.id && <button className="btn sm danger" onClick={() => remove(u)}>Supprimer</button>}
+                {u.id !== session.user.id && <button className="btn sm danger" onClick={() => setDeleting(u)}>Supprimer</button>}
               </div>
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="card">
+        <div className="spread"><h2>Communautés</h2><button className="btn sm" onClick={() => setNaming({ kind: 'community' })}><Icon name="plus" size={16} /> Communauté</button></div>
+        <p className="muted small">Les recettes partagées ne sont visibles qu'entre les foyers d'une même communauté. Changer un foyer de communauté s'applique à tous ses membres.</p>
+        {[...(d.communities || []), { id: '', name: 'Sans communauté' }].map((c) => {
+          const list = d.households.filter((h) => (h.community_id || '') === c.id)
+          if (!c.id && !list.length) return null
+          return (
+            <div key={c.id || 'none'} className="community">
+              <div className="spread"><h3>{c.name} <small className="muted">· {list.length} foyer{list.length > 1 ? 's' : ''}</small></h3>
+                {c.id && <button className="link" onClick={() => setNaming({ kind: 'rename', id: c.id, initial: c.name })}>Renommer</button>}</div>
+              <ul className="plain">
+                {list.map((h) => (
+                  <li key={h.id} className="spread"><span>{h.name} <small className="muted">· {d.users.filter((u) => u.household_id === h.id).map((u) => u.display_name).join(', ') || 'aucun membre'}</small></span>
+                    <select className="mini" value={h.community_id || ''} onChange={(e) => setCommunity(h.id, e.target.value)} aria-label={`Communauté de ${h.name}`}>
+                      <option value="">— Aucune —</option>
+                      {(d.communities || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    </select>
+                  </li>
+                ))}
+              </ul>
+              {c.id && <button className="link" onClick={() => setNaming({ kind: 'household', community_id: c.id })}>+ Foyer dans {c.name}</button>}
+            </div>
+          )
+        })}
       </section>
 
       <section className="card">
@@ -158,6 +218,14 @@ export default function Admin() {
         <button className="btn block" onClick={backup}><Icon name="download" size={18} /> Télécharger une sauvegarde</button>
       </section>
 
+      {deleting && (
+        <Sheet title="Supprimer le compte" onClose={() => setDeleting(null)}
+          footer={<div className="two"><button className="btn" onClick={() => setDeleting(null)}>Annuler</button><button className="btn danger-fill" onClick={() => remove(deleting)}>Supprimer</button></div>}>
+          <p>Supprimer définitivement le compte de <b>{deleting.display_name || deleting.email}</b> ({deleting.email})?</p>
+          <p className="muted small">Ses avis et préférences sont supprimés. S'il était le dernier membre de son foyer, les recettes partagées du foyer sont conservées dans le vôtre et le reste du foyer est supprimé. Cette action est irréversible.</p>
+        </Sheet>
+      )}
+      {naming && <NameSheet naming={naming} onClose={() => setNaming(null)} onSave={saveName} />}
       {creating && <CreateUser households={d.households} onClose={() => setCreating(false)}
         onCreated={(r) => { setCreating(false); setSecret({ title: 'Compte créé', ...r }); load() }} />}
       {secret && (
@@ -171,6 +239,19 @@ export default function Admin() {
         </Sheet>
       )}
     </>
+  )
+}
+
+function NameSheet({ naming, onClose, onSave }) {
+  const [name, setName] = useState(naming.initial || '')
+  const title = naming.kind === 'household' ? 'Nouveau foyer' : naming.kind === 'community' ? 'Nouvelle communauté' : 'Renommer la communauté'
+  return (
+    <Sheet title={title} onClose={onClose}
+      footer={<button className="btn primary block" disabled={!name.trim()} onClick={() => onSave(name.trim())}>Enregistrer</button>}>
+      <Field label="Nom"><input autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)}
+        placeholder={naming.kind === 'household' ? 'ex. Famille Tremblay' : 'ex. Amis du chalet'} /></Field>
+      {naming.user && <p className="muted small">{naming.user.display_name} sera placé(e) dans ce foyer.</p>}
+    </Sheet>
   )
 }
 

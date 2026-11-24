@@ -472,3 +472,15 @@ table.preview th { color: var(--muted); font-weight: 650; }
 .left-row .btn { flex: 1; }
 .page-head > div:first-child { min-width: 0; }
 .page-head .head-actions { gap: 2px; flex: none; }
+
+/* v1.3 : administration des foyers et communautés */
+.assign { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.assign label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.assign small { color: var(--muted); font-size: 11px; }
+.assign select { width: 100%; }
+.community { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+.community h3 { margin: 0 0 6px; font-size: 16px; }
+.community li { gap: 8px; padding: 6px 0; }
+.community li > span { min-width: 0; }
+.community select { max-width: 45%; }
+.btn.danger-fill { background: var(--red); color: #fff; border-color: var(--red); }

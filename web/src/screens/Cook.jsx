@@ -54,7 +54,7 @@ export function ScaledIngredients({ ingredients, factor, onFactor, checkable }) 
   )
 }
 
-// Avis du groupe : goût (0 à 5), temps réel, commentaire
+// Avis de la communauté : goût (0 à 5), temps réel, commentaire
 export function Reviews({ recipe, reviews, onChanged, startOpen }) {
   const { session, profile, toast } = useApp()
   const mine = reviews.find((r) => r.user_id === session.user.id)
@@ -81,7 +81,7 @@ export function Reviews({ recipe, reviews, onChanged, startOpen }) {
 
   return (
     <div className="reviews">
-      <h3>Avis du groupe {reviews.length > 0 && <small>({reviews.length})</small>}</h3>
+      <h3>Avis de la communauté {reviews.length > 0 && <small>({reviews.length})</small>}</h3>
       {!open ? (
         <button className="btn sm" onClick={() => setOpen(true)}><Icon name="star" size={16} /> {mine ? 'Modifier mon avis' : 'Donner mon avis'}</button>
       ) : (
@@ -104,7 +104,7 @@ export function Reviews({ recipe, reviews, onChanged, startOpen }) {
               <input className="mini-num" inputMode="numeric" placeholder="autre" value={[15, 30, 45, 60, 90, 120].includes(+minutes) ? '' : minutes} onChange={(e) => setMinutes(e.target.value.replace(/\D/g, ''))} />
             </div>
           </div>
-          <label className="field"><span>Commentaire, conseil (visible par le groupe)</span>
+          <label className="field"><span>Commentaire, conseil (visible par la communauté)</span>
             <textarea rows={3} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="ex. Doubler l'ail, cuire 5 min de plus" /></label>
           <div className="two">
             {mine ? <button className="btn danger" onClick={remove}>Retirer</button> : <button className="btn" onClick={() => setOpen(false)}>Annuler</button>}

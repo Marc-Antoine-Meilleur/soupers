@@ -108,3 +108,10 @@ Changements faits pour réduire les manipulations :
 **Licences ajoutées** : `qrcode` (MIT), `jsqr` (Apache-2.0). Chargées seulement à l'ouverture du scanner ou de l'impression.
 
 **À savoir** : la caméra de l'iPhone (hors de l'app) ouvre le lien de l'étiquette dans Safari, où il faut être connecté ; le bouton Scanner de l'inventaire est la façon recommandée.
+
+## 7. Version 1.3 (24 novembre 2026) : communautés
+
+- **Communautés** : table `communities`, `households.community_id`. Une recette partagée n'est visible que par les foyers de la même communauté (fonctions `household_community()` / `my_community()` en security definer). Les membres ne peuvent pas changer la communauté de leur foyer ; seul l'admin le fait (fonction `admin`). Tous les foyers existants ont été placés dans « Ateliers du Champ Libre ». Tests C1 à C10.
+- **Partage par défaut** : `recipes.shared` vaut maintenant `true` par défaut (case cochée dans l'éditeur). Les recettes copiées d'une autre personne restent privées pour éviter les doublons.
+- **Suppression d'un utilisateur** : la boîte « Tapez SUPPRIMER » (qui échouait si le texte était autocorrigé, ex. « Supprimer ») est remplacée par une fenêtre de confirmation.
+- **Semaine** : « Ajouter au menu » (plus seulement les soupers).

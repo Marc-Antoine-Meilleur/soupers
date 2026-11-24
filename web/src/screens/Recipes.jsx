@@ -85,9 +85,9 @@ export default function Recipes() {
 
   return (
     <>
-      <Header title="Recettes" sub={recipes ? `${recipes.filter((r) => r.household_id === household.id).length} dans votre archive · ${recipes.filter((r) => r.household_id !== household.id).length} des amis` : ''}
+      <Header title="Recettes" sub={recipes ? `${recipes.filter((r) => r.household_id === household.id).length} dans votre archive · ${recipes.filter((r) => r.household_id !== household.id).length} de la communauté` : ''}
         action={<div className="head-actions"><FeedbackButton screen="Recettes" /><button className="btn primary sm" onClick={() => setAdding(true)}><Icon name="plus" size={18} /> Ajouter</button></div>} />
-      <Segmented value={source} onChange={setSource} options={[['all', 'Toutes'], ['mine', 'Mon foyer'], ['friends', 'Amis']]} />
+      <Segmented value={source} onChange={setSource} options={[['all', 'Toutes'], ['mine', 'Mon foyer'], ['friends', 'Communauté']]} />
       <div className="search">
         <Icon name="search" size={18} />
         <input placeholder="Titre, ingrédient, mot-clé…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -239,7 +239,7 @@ export function RecipeDetail({ recipe, data, onClose: close, onChanged, unsaved,
           <button className={`btn sm ${pref === 'favori' ? 'on-fav' : ''}`} onClick={() => data.setPref(r.id, 'favori')}><Icon name="heart" size={16} fill={pref === 'favori' ? 'currentColor' : 'none'} /> {pref === 'favori' ? 'Favori' : 'Ajouter aux favoris'}</button>
           <button className={`btn sm ${pref === 'bloquee' ? 'on-block' : ''}`} onClick={() => { data.setPref(r.id, 'bloquee'); if (pref !== 'bloquee') toast('Cette recette ne sera plus proposée dans votre menu') }}>⊘ {pref === 'bloquee' ? 'Bloquée' : 'Ne plus proposer'}</button>
           {mine && (
-            <label className="switch"><input type="checkbox" checked={r.shared} onChange={(e) => update({ shared: e.target.checked })} /><span>Partagée avec les amis</span></label>
+            <label className="switch"><input type="checkbox" checked={r.shared} onChange={(e) => update({ shared: e.target.checked })} /><span>Partagée avec la communauté</span></label>
           )}
         </div>
       )}
@@ -403,6 +403,7 @@ export function RecipeEditor({ initial, onClose, onSaved }) {
       tags: [...new Set([...r.tagSet, ...r.tagsText.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)])].slice(0, 15),
       health_notes: r.health_notes || null, source_url: safeUrl(r.source_url || '') || null, file_path: r.file_path || null,
       needs_review: false,
+      ...(initial.id ? {} : { shared: r.shared !== false }),
     }
     const q = initial.id
       ? supabase.from('recipes').update(row).eq('id', initial.id).select().single()
@@ -448,6 +449,7 @@ export function RecipeEditor({ initial, onClose, onSaved }) {
         </div>
       ))}
       <Field label="Autres mots-clés (séparés par des virgules)"><input value={r.tagsText} onChange={(e) => set('tagsText', e.target.value)} placeholder="poulet, mexicain" /></Field>
+      {!initial.id && <label className="switch"><input type="checkbox" checked={r.shared !== false} onChange={(e) => set('shared', e.target.checked)} /><span>Partagée avec la communauté</span></label>}
       <Field label="Notes santé"><input value={r.health_notes || ''} onChange={(e) => set('health_notes', e.target.value)} /></Field>
       <Field label="Lien source"><input value={r.source_url || ''} onChange={(e) => set('source_url', e.target.value)} /></Field>
     </Sheet>

@@ -1,6 +1,7 @@
 // AU MENU · Ateliers du Champ Libre — fonction d'administration (Supabase Edge Function, Deno)
 // Réservée aux comptes « is_admin ». Utilise la clé secrète du projet, jamais exposée au navigateur.
-// Actions : overview, create_user, reset_password, move_user, delete_user, set_config
+// Actions : overview, create_user, reset_password, move_user, delete_user, set_config,
+//           create_household, set_household_community, create_community, rename_community
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -24,6 +25,11 @@ function tempPassword() {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
 }
+
+const DEFAULT_SETTINGS = {
+  stores: ["Maxi", "IGA", "Costco"], category_store: {}, plan_days: [0, 1, 2, 3, 4, 5, 6], servings: 4,
+  max_minutes_weekday: 40, max_minutes_weekend: 90, health: ["Réduire les glucides", "Réduire le sucre"], avoid: "", likes: "",
+};
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin") ?? "";
@@ -50,16 +56,19 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = body?.action;
+    const firstCommunity = async () =>
+      (await admin.from("communities").select("id").order("created_at").limit(1).maybeSingle()).data?.id ?? null;
 
     // ---------- Vue d'ensemble : utilisateurs, foyers, coûts ----------
     if (action === "overview") {
-      const [{ data: list }, { data: profiles }, { data: households }, { data: calls }, { data: cfg }, { data: usage }] = await Promise.all([
+      const [{ data: list }, { data: profiles }, { data: households }, { data: calls }, { data: cfg }, { data: usage }, { data: communities }] = await Promise.all([
         admin.auth.admin.listUsers({ perPage: 1000 }),
         admin.from("profiles").select("id,display_name,household_id,is_admin"),
-        admin.from("households").select("id,name,invite_code,created_at"),
+        admin.from("households").select("id,name,invite_code,created_at,community_id").order("name"),
         admin.from("ai_calls").select("created_at,user_id,user_name,household_id,action,model,input_tokens,output_tokens,cost_usd").order("created_at", { ascending: false }).limit(20000),
         admin.from("app_config").select("credits_usd,ai_daily_limit,group_code").single(),
         admin.from("ai_usage").select("household_id,calls").eq("day", new Date().toISOString().slice(0, 10)),
+        admin.from("communities").select("id,name,created_at").order("created_at"),
       ]);
       const pmap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
       const users = (list?.users ?? []).map((u: any) => ({
@@ -67,7 +76,7 @@ Deno.serve(async (req) => {
         display_name: pmap.get(u.id)?.display_name ?? null, household_id: pmap.get(u.id)?.household_id ?? null,
         is_admin: !!pmap.get(u.id)?.is_admin, must_change_password: !!u.user_metadata?.must_change_password,
       }));
-      return json({ users, households, calls, config: cfg, usage_today: usage });
+      return json({ users, households, communities, calls, config: cfg, usage_today: usage });
     }
 
     // ---------- Créer un utilisateur (mot de passe temporaire) ----------
@@ -80,10 +89,8 @@ Deno.serve(async (req) => {
       if (!householdId && clean(body.new_household, 80)) {
         const { data: h, error } = await admin.from("households").insert({
           name: clean(body.new_household, 80),
-          settings: {
-            stores: ["Maxi", "IGA", "Costco"], category_store: {}, plan_days: [0, 1, 2, 3, 4, 5, 6], servings: 4,
-            max_minutes_weekday: 40, max_minutes_weekend: 90, health: ["Réduire les glucides", "Réduire le sucre"], avoid: "", likes: "",
-          },
+          community_id: isUuid(body.community_id) ? body.community_id : await firstCommunity(),
+          settings: DEFAULT_SETTINGS,
         }).select().single();
         if (error) throw error;
         householdId = h.id;
@@ -146,9 +153,41 @@ Deno.serve(async (req) => {
       return json({ ok: true, moved_recipes: movedRecipes });
     }
 
+    // ---------- Foyers et communautés ----------
+    if (action === "create_household") {
+      const name = clean(body.name, 80);
+      if (!name) throw new UserError("Nom du foyer requis.");
+      const { data, error } = await admin.from("households").insert({
+        name, community_id: isUuid(body.community_id) ? body.community_id : await firstCommunity(), settings: DEFAULT_SETTINGS,
+      }).select("id").single();
+      if (error) throw error;
+      return json({ id: data.id });
+    }
+    if (action === "set_household_community") {
+      if (!isUuid(body.household_id)) throw new UserError("Foyer invalide.");
+      const cid = isUuid(body.community_id) ? body.community_id : null;
+      const { error } = await admin.from("households").update({ community_id: cid }).eq("id", body.household_id);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+    if (action === "create_community") {
+      const name = clean(body.name, 80);
+      if (!name) throw new UserError("Nom de la communauté requis.");
+      const { data, error } = await admin.from("communities").insert({ name }).select("id").single();
+      if (error) throw error;
+      return json({ id: data.id });
+    }
+    if (action === "rename_community") {
+      const name = clean(body.name, 80);
+      if (!isUuid(body.id) || !name) throw new UserError("Communauté invalide.");
+      const { error } = await admin.from("communities").update({ name }).eq("id", body.id);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+
     // ---------- Sauvegarde complète (JSON) ----------
     if (action === "backup") {
-      const tables = ["households", "profiles", "recipes", "recipe_reviews", "recipe_prefs", "inventory_items",
+      const tables = ["communities", "households", "profiles", "recipes", "recipe_reviews", "recipe_prefs", "inventory_items",
         "meal_plans", "shopping_items", "feedback", "ai_calls", "ai_usage", "app_config"];
       const out: Record<string, unknown> = {
         format: "au-menu-backup", version: 1, created_at: new Date().toISOString(), created_by: user.email,

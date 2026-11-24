@@ -84,7 +84,7 @@ class Query {
     const match = (r) => this.filters.every((f) => f(r))
     let out = []
     const hh = myHH()
-    const defaults = () => ({ id: uid(), household_id: hh, user_id: db.session?.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    const defaults = () => ({ ...(t === 'recipes' ? { shared: true } : {}), id: uid(), household_id: hh, user_id: db.session?.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     if (this.op === 'select') out = visible(t).filter(match)
     if (this.op === 'insert') { out = this.rows.map((r) => ({ ...defaults(), ...r })); db[t].push(...out) }
     if (this.op === 'upsert') {
@@ -198,7 +198,8 @@ export function createMock() {
             return { data: { users: [
               { id: 'demo-user', email: 'vous@exemple.com', display_name: 'Moi', household_id: 'demo-foyer', is_admin: true, last_sign_in_at: new Date().toISOString() },
               { id: 'ami-1', email: 'julie@exemple.com', display_name: 'Julie', household_id: 'autre', is_admin: false, must_change_password: true },
-            ], households: [{ id: 'demo-foyer', name: 'Foyer démo' }, { id: 'autre', name: 'Famille de Julie' }], calls,
+            ], households: [{ id: 'demo-foyer', name: 'Foyer démo', community_id: 'c1' }, { id: 'autre', name: 'Famille de Julie', community_id: 'c1' }],
+            communities: [{ id: 'c1', name: 'Ateliers du Champ Libre' }, { id: 'c2', name: 'Amis du chalet' }], calls,
             config: { credits_usd: 5, ai_daily_limit: 40, group_code: 'CHAMP-DEMO' }, usage_today: [{ household_id: 'demo-foyer', calls: 3 }] }, error: null }
           }
           if (body.action === 'create_user' || body.action === 'reset_password') return { data: { password: 'Demo7kQp2mXa', user_id: 'x' }, error: null }

@@ -1,5 +1,5 @@
 // Service worker minimal : met l'app en cache pour un démarrage rapide (réseau d'abord).
-const CACHE = 'champlibre-v1-2-1'
+const CACHE = 'champlibre-v1-3'
 self.addEventListener('install', (e) => self.skipWaiting())
 self.addEventListener('activate', (e) => e.waitUntil(
   caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())

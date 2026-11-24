@@ -15,7 +15,7 @@ export default function Onboarding() {
     const { data, error } = await supabase.rpc(fn, args)
     setBusy(false)
     if (error) setErr(error.message)
-    else if (!data?.id) setErr(fn === 'create_household' ? 'Code du groupe invalide. Demandez-le à l\'administrateur.' : 'Ce code ne correspond à aucun foyer.')
+    else if (!data?.id) setErr(fn === 'create_household' ? 'Code de la communauté invalide. Demandez-le à l\'administrateur.' : 'Ce code ne correspond à aucun foyer.')
     else reload()
   }
 
@@ -29,7 +29,7 @@ export default function Onboarding() {
         <h2>Créer mon foyer</h2>
         <label className="field"><span>Nom du foyer</span>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="ex. Famille Tremblay" /></label>
-        <label className="field"><span>Code du groupe</span>
+        <label className="field"><span>Code de la communauté</span>
           <input value={group} onChange={(e) => setGroup(e.target.value)} autoCapitalize="characters" placeholder="Fourni par l'administrateur" /></label>
         <button className="btn primary block" disabled={!name.trim() || !group.trim() || busy} onClick={() => run('create_household', { p_name: name.trim(), p_group_code: group.trim() })}>Créer</button>
       </div>
