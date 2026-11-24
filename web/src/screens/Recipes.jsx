@@ -164,9 +164,12 @@ function DetailPhoto({ r, mine, onPhoto }) {
   ) : null
 }
 
-export function RecipeDetail({ recipe, data, onClose, onChanged, unsaved, servings: plannedServings, onServings }) {
+export function RecipeDetail({ recipe, data, onClose: close, onChanged, unsaved, servings: plannedServings, onServings }) {
   const { household, profile, toast } = useApp()
   const [r, setR] = useState(recipe)
+  // Une modification (« C'est correct », photo, partage…) rafraîchit la liste à la fermeture
+  const [dirty, setDirty] = useState(false)
+  const onClose = () => { if (dirty) data?.reload?.(); close() }
   const [editing, setEditing] = useState(false)
   const [cooking, setCooking] = useState(false)
   const [reviewing, setReviewing] = useState(false)
@@ -182,6 +185,7 @@ export function RecipeDetail({ recipe, data, onClose, onChanged, unsaved, servin
     setR({ ...r, ...patch })
     const { error } = await supabase.from('recipes').update(patch).eq('id', r.id)
     if (error) toast('Erreur : ' + error.message)
+    else setDirty(true)
   }
   const remove = async () => {
     if (!confirm(`Supprimer « ${r.title} »?`)) return
@@ -224,7 +228,7 @@ export function RecipeDetail({ recipe, data, onClose, onChanged, unsaved, servin
       </div>
       {r.needs_review && mine && (
         <div className="note warn">Importée automatiquement : vérifiez les quantités.
-          <div className="two"><button className="btn sm" onClick={() => setEditing(true)}>Corriger</button><button className="btn sm" onClick={() => update({ needs_review: false })}>C'est correct</button></div>
+          <div className="two"><button className="btn sm" onClick={() => setEditing(true)}>Corriger</button><button className="btn sm" onClick={() => { update({ needs_review: false }); toast('Recette vérifiée') }}>C'est correct</button></div>
         </div>
       )}
       {r.description && <p>{r.description}</p>}
