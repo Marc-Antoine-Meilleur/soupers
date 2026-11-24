@@ -86,3 +86,25 @@ Changements faits pour réduire les manipulations :
 - **Sauvegarde** : un export JSON complet est réservé à l'admin. Il contient les courriels : conservez-le en lieu sûr.
 - **Historique des menus** : conservé 12 mois, puis supprimé automatiquement.
 - **Tests de sécurité** : 38 vérifications au total (21 de la v1.0 et 17 nouvelles), toutes réussies.
+
+## 6. Version 1.2 (23 novembre 2026) : menu à glisser, étiquettes QR
+
+**Fonctions**
+- Onglet Semaine : « Composer ma semaine » (cartes à glisser, filtres par étiquette, annuler) et « Ce soir, on mange quoi ? » (sans planifier, ouvre le mode cuisine). Plusieurs recettes par soir (soupe + plat), « + » sur chaque journée, « Compléter avec Claude » ne remplit que les soirs vides.
+- Ajout express pendant la planification : lien, photo ou PDF → recette rangée dans l'archive (« À vérifier ») et ajoutée au soir choisi.
+- « Demander à Claude » : 3 idées, trouvées sur le web (recherche web de l'API, avec l'adresse source) ou inventées. Gardées seulement si approuvées.
+- Étiquettes officielles (Type, Alimentation, Pratique) attribuées à l'import, modifiables en un toucher, et « Étiqueter avec Claude » pour l'archive existante.
+- Photos des plats (réduites à ~1200 px avant l'envoi) ; sinon cartes typographiques.
+- Étiquettes QR du congélateur : impression 30 par feuille (format Avery 5160/8160), lecture par la caméra de l'app, photo ou code tapé ; « Tout utilisé » / « Il en reste… » met l'inventaire et le plan à jour.
+
+**Sécurité**
+- `label_code` : format imposé (4 à 8 lettres/chiffres), unique par foyer, invisible des autres foyers (RLS existante).
+- Photos : un ami peut lire la photo d'une recette partagée, **seulement si le fichier est dans le dossier du foyer propriétaire** (empêche de pointer une recette vers le fichier privé d'un autre foyer). Tests Q1 à Q10.
+- Recherche web : la demande de l'utilisateur est traitée comme une donnée ; les recettes trouvées sont reformulées et nettoyées (étiquettes limitées à la liste officielle, liens http(s) seulement).
+- Le lien d'une étiquette (`?e=CODE`) ne contient aucune donnée : seulement un code aléatoire ; il faut être connecté pour voir l'article.
+
+**Coûts** : une demande « 3 idées » sur le web ≈ 1 à 3 recherches (10 $ US / 1000, soit 0,01 à 0,03 $) + Haiku ; inventées ≈ 0,002 $. Le coût des recherches est inclus dans le tableau de bord admin.
+
+**Licences ajoutées** : `qrcode` (MIT), `jsqr` (Apache-2.0). Chargées seulement à l'ouverture du scanner ou de l'impression.
+
+**À savoir** : la caméra de l'iPhone (hors de l'app) ouvre le lien de l'étiquette dans Safari, où il faut être connecté ; le bouton Scanner de l'inventaire est la façon recommandée.

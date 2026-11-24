@@ -28,6 +28,13 @@ export default function App() {
   const [tab, setTab] = useState(() => localStorage.getItem('soupers-tab') || 'week')
   const [toastMsg, setToastMsg] = useState(null)
   const [recovering, setRecovering] = useState(false)
+  // Lien d'étiquette QR (?e=CODE) : ouvre l'inventaire sur cet article
+  const [pendingLabel, setPendingLabel] = useState(() => {
+    const c = new URLSearchParams(location.search).get('e')
+    if (!c) return null
+    const u = new URL(location.href); u.searchParams.delete('e'); history.replaceState(null, '', u)
+    return /^[A-Z0-9]{4,8}$/i.test(c) ? c.toUpperCase() : null
+  })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -47,6 +54,7 @@ export default function App() {
 
   useEffect(() => { loadProfile() }, [loadProfile])
 
+  useEffect(() => { if (pendingLabel) setTab('inventory') }, [pendingLabel])
   const go = (t) => { setTab(t); localStorage.setItem('soupers-tab', t); window.scrollTo(0, 0) }
   const toast = (m) => { setToastMsg(m); setTimeout(() => setToastMsg(null), 2600) }
 
@@ -62,7 +70,7 @@ export default function App() {
   if (recovering || session.user.user_metadata?.must_change_password) return <NewPassword first={!recovering} onDone={() => setRecovering(false)} />
   if (!profile) return <div className="splash"><img className="brand-logo" src="./brand/logo.png" alt="Ateliers du Champ Libre" /></div>
 
-  const ctx = { session, profile, household, setProfile, reload: loadProfile, go, toast, saveSettings }
+  const ctx = { session, profile, household, setProfile, reload: loadProfile, go, toast, saveSettings, pendingLabel, setPendingLabel }
 
   return (
     <Ctx.Provider value={ctx}>

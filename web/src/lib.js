@@ -189,3 +189,97 @@ export function normLocation(v, fallback) {
   if (/garde|pantry|armoire|épicerie|sec/.test(s)) return 'Garde-manger'
   return fallback
 }
+
+// ----- Étiquettes (même liste que la fonction IA) -----
+export const TAG_GROUPS = [
+  ['Type', ['Soupe', 'Plat principal', 'Accompagnement', 'Sauce', 'Salade', 'Déjeuner', 'Dessert']],
+  ['Alimentation', ['Sans lactose', 'Sans gluten', 'Végé', 'Faible en glucides', 'Faible en sucre', 'Riche en protéines']],
+  ['Pratique', ['Rapide', 'Mijoteuse', 'Une casserole', 'Se congèle', 'BBQ']],
+]
+export const TAGS = TAG_GROUPS.flatMap(([, t]) => t)
+// Une recette « d'accompagnement » se combine avec un plat le même soir
+export const SIDE_TAGS = ['Soupe', 'Accompagnement', 'Sauce', 'Salade']
+export const isSide = (r) => (r?.tags || []).some((t) => SIDE_TAGS.includes(t)) && !(r?.tags || []).includes('Plat principal')
+const lowerTags = new Map(TAGS.map((t) => [t.toLowerCase(), t]))
+export const canonTag = (t) => lowerTags.get(String(t).trim().toLowerCase()) || String(t).trim()
+
+// Identifiant court pour une entrée du menu
+export const newKey = () => Math.random().toString(36).slice(2, 10)
+
+// Réduit une photo (JPEG ~1200 px) avant l'envoi : plus rapide et moins d'espace
+export async function resizeImage(file, max = 1200, quality = 0.82) {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file
+  try {
+    const bmp = await createImageBitmap(file)
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height))
+    const c = document.createElement('canvas')
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k)
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height)
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', quality))
+    return blob ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file
+  } catch { return file }
+}
+
+// Envoie un fichier dans le dossier privé du foyer
+export async function uploadFile(file, householdId) {
+  const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin'
+  const path = `${householdId}/${crypto.randomUUID ? crypto.randomUUID() : Date.now()}.${ext}`
+  const { error } = await supabase.storage.from('recipe-files').upload(path, file, { contentType: file.type })
+  if (error) throw error
+  return path
+}
+
+// Liens signés des photos (gardés en mémoire 50 min)
+const photoCache = new Map()
+export async function photoUrl(path) {
+  if (!path) return null
+  const c = photoCache.get(path)
+  if (c && c.until > Date.now()) return c.url
+  const { data } = await supabase.storage.from('recipe-files').createSignedUrl(path, 3600)
+  const url = data?.signedUrl && data.signedUrl !== '#' ? data.signedUrl : null
+  photoCache.set(path, { url, until: Date.now() + 50 * 60000 })
+  return url
+}
+
+// Importe une recette depuis un lien, un texte ou un fichier (photo, PDF) et l'enregistre dans l'archive
+export async function importAndSave({ link, text, file }, { householdId, author }) {
+  let recipe, extra = {}
+  if (file) {
+    const small = await resizeImage(file, 2000, 0.85)
+    const path = await uploadFile(small, householdId)
+    recipe = (await ai('import_file', { path })).recipe
+    extra = { file_path: path }
+  } else if (link) {
+    recipe = (await ai('import_url', { url: link })).recipe
+    extra = { source_url: link }
+  } else recipe = (await ai('import_text', { text })).recipe
+  if (!recipe || recipe.error) throw new Error(recipe?.error || 'Aucune recette trouvée')
+  return saveRecipe({ ...recipe, ...extra, needs_review: true }, author)
+}
+export async function saveRecipe(recipe, author) {
+  const { id: _i, _new, _day, ...row } = recipe
+  const { data, error } = await supabase.from('recipes').insert({ ...row, author_name: author }).select().single()
+  if (error) throw error
+  return data
+}
+
+// Score pour l'ordre des cartes : inventaire, notes, favoris, variété, temps
+export function rankRecipes(recipes, { stats, prefs, inventory = [], recentIds = new Set(), maxMinutes }) {
+  const inv = inventory.map((i) => i.name.toLowerCase().split(/[\s,]+/).filter((w) => w.length > 3)).filter((w) => w.length)
+  return recipes
+    .filter((r) => prefs[r.id] !== 'bloquee')
+    .map((r) => {
+      const st = stats.get(r.id)
+      const min = st?.minutes || r.prep_minutes
+      const ingNames = (r.ingredients || []).map((i) => (i.name || '').toLowerCase())
+      const uses = inventory.filter((_, k) => inv[k] && ingNames.some((n) => inv[k].some((w) => n.includes(w)))).map((i) => i.name)
+      let score = Math.random() * 1.5
+      score += uses.length * 2
+      if (st?.taste != null) score += (st.taste - 3) * 1.2
+      if (prefs[r.id] === 'favori') score += 2.5
+      if (recentIds.has(r.id)) score -= 4
+      if (maxMinutes && min && min > maxMinutes) score -= 2
+      return { r, score, uses }
+    })
+    .sort((a, b) => b.score - a.score)
+}

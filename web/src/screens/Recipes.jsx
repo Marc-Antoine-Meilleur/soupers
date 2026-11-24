@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase, ai, CATEGORIES, safeUrl, reviewStats, fmtNum } from '../lib'
+import { supabase, ai, CATEGORIES, safeUrl, reviewStats, fmtNum, TAGS, TAG_GROUPS, canonTag, resizeImage, uploadFile } from '../lib'
 import { FeedbackButton } from '../shared'
 import { useApp } from '../App'
 import { Icon, Sheet, Spinner, Empty, Header, Field, Segmented } from '../ui'
 import { CookMode, Reviews, ScaledIngredients, Servings, StatsLine } from './Cook'
+import { usePhoto, toneOf } from './Deck'
 
 // Recettes + avis + préférences (favori / bloquée) de l'utilisateur
 export function useRecipeData() {
@@ -45,6 +46,9 @@ export default function Recipes() {
   const [sort, setSort] = useState('recent')
   const [open, setOpen] = useState(null)
   const [adding, setAdding] = useState(false)
+  const [tag, setTag] = useState(null)
+  const [tagging, setTagging] = useState(false)
+  const { toast } = useApp()
   const toggle = (k) => setFilters({ ...filters, [k]: !filters[k] })
 
   const list = useMemo(() => {
@@ -58,15 +62,26 @@ export default function Recipes() {
       .filter((r) => !filters.top || (stats.get(r.id)?.taste ?? 0) >= 4)
       .filter((r) => !filters.quick || time(r) <= 30)
       .filter((r) => !filters.review || r.needs_review)
+      .filter((r) => !tag || (r.tags || []).includes(tag))
       .filter((r) => !term || r.title.toLowerCase().includes(term) || (r.tags || []).some((t) => t.toLowerCase().includes(term))
         || (r.ingredients || []).some((i) => i.name?.toLowerCase().includes(term)))
     if (sort === 'note') out.sort((a, b) => (stats.get(b.id)?.taste ?? -1) - (stats.get(a.id)?.taste ?? -1))
     if (sort === 'temps') out.sort((a, b) => time(a) - time(b))
     if (sort === 'az') out.sort((a, b) => a.title.localeCompare(b.title, 'fr'))
     return out
-  }, [recipes, source, q, filters, sort, stats, prefs, household.id])
+  }, [recipes, source, q, filters, sort, stats, prefs, household.id, tag])
 
   const toReview = (recipes || []).filter((r) => r.needs_review && r.household_id === household.id).length
+  const untagged = (recipes || []).filter((r) => r.household_id === household.id && !(r.tags || []).some((t) => TAGS.includes(t))).length
+  const usedTags = TAGS.filter((t) => (recipes || []).some((r) => (r.tags || []).includes(t)))
+  const autoTag = async () => {
+    setTagging(true)
+    try {
+      let left = untagged, done = 0
+      for (let i = 0; i < 8 && left > 0; i++) { const res = await ai('tag_recipes'); done += res.tagged; left = res.remaining; if (!res.tagged) break }
+      toast(`${done} recette${done > 1 ? 's' : ''} étiquetée${done > 1 ? 's' : ''}`); data.reload()
+    } catch (e) { toast(e.message) } finally { setTagging(false) }
+  }
 
   return (
     <>
@@ -85,10 +100,17 @@ export default function Recipes() {
           {toReview > 0 && <button className={`chip ${filters.review ? 'on' : ''}`} onClick={() => toggle('review')}>À vérifier ({toReview})</button>}
           <button className={`chip ${filters.blocked ? 'on' : ''}`} onClick={() => toggle('blocked')}>⊘ Bloquées</button>
         </div>
+        <select className="mini sort" value={tag || ''} onChange={(e) => setTag(e.target.value || null)} aria-label="Étiquette">
+          <option value="">Étiquette</option>{usedTags.map((t) => <option key={t}>{t}</option>)}
+        </select>
         <select className="mini sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Trier">
           {SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </div>
+      {untagged > 0 && (
+        <div className="note tagnote">{untagged} recette{untagged > 1 ? 's' : ''} sans étiquette (Soupe, Rapide, Végé…).
+          <button className="btn sm" disabled={tagging} onClick={autoTag}>{tagging ? 'Étiquetage…' : 'Étiqueter avec Claude'}</button></div>
+      )}
       {!recipes ? <Spinner /> : list.length === 0 ? (
         recipes.length === 0
           ? <Empty icon="book" title="Votre archive est vide">
@@ -100,6 +122,7 @@ export default function Recipes() {
         <ul className="list">
           {list.map((r) => (
             <li key={r.id} className="card recipe-row" onClick={() => setOpen(r)}>
+              <Thumb r={r} />
               <div className="grow">
                 <h3>{prefs[r.id] === 'favori' && <span className="fav">♥ </span>}{r.title}</h3>
                 <div className="meta">
@@ -109,7 +132,7 @@ export default function Recipes() {
                   {r.needs_review && r.household_id === household.id && <span className="pill orange">À vérifier</span>}
                   {prefs[r.id] === 'bloquee' && <span className="pill red">Bloquée</span>}
                 </div>
-                {r.tags?.length > 0 && <div className="tags">{r.tags.slice(0, 4).map((t) => <span key={t} className="tag">{t}</span>)}</div>}
+                {r.tags?.length > 0 && <div className="tags">{r.tags.slice(0, 4).map((t) => <span key={t} className={`tag ${t === tag ? 'on' : ''}`}>{t}</span>)}</div>}
               </div>
               <Icon name="next" size={18} className="chev" />
             </li>
@@ -120,6 +143,25 @@ export default function Recipes() {
       {adding && <AddRecipe onClose={() => { setAdding(false); data.reload() }} onSaved={() => { setAdding(false); data.reload() }} />}
     </>
   )
+}
+
+function Thumb({ r }) {
+  const url = usePhoto(r.photo_path)
+  return url ? <img className="thumb" src={url} alt="" /> : <div className={`thumb tone-${toneOf(r)}`}>{r.title.trim()[0]}</div>
+}
+
+function DetailPhoto({ r, mine, onPhoto }) {
+  const url = usePhoto(r.photo_path)
+  const [busy, setBusy] = useState(false)
+  const pick = async (f) => { if (!f) return; setBusy(true); try { await onPhoto(f) } finally { setBusy(false) } }
+  if (url) return (
+    <div className="detail-photo"><img src={url} alt={r.title} />
+      {mine && <label className="btn sm photo-change"><Icon name="camera" size={16} />{busy ? '…' : 'Changer'}<input type="file" accept="image/*" hidden onChange={(e) => pick(e.target.files[0])} /></label>}
+    </div>
+  )
+  return mine && r.id ? (
+    <label className="photo-add"><Icon name="camera" size={18} /> {busy ? 'Envoi…' : 'Ajouter une photo du plat'}<input type="file" accept="image/*" hidden onChange={(e) => pick(e.target.files[0])} /></label>
+  ) : null
 }
 
 export function RecipeDetail({ recipe, data, onClose, onChanged, unsaved, servings: plannedServings, onServings }) {
@@ -144,14 +186,24 @@ export function RecipeDetail({ recipe, data, onClose, onChanged, unsaved, servin
   const remove = async () => {
     if (!confirm(`Supprimer « ${r.title} »?`)) return
     await supabase.from('recipes').delete().eq('id', r.id)
-    if (r.file_path) await supabase.storage.from('recipe-files').remove([r.file_path])
+    const files = [r.file_path, r.photo_path].filter(Boolean)
+    if (files.length) await supabase.storage.from('recipe-files').remove([...new Set(files)])
     toast('Recette supprimée'); onChanged()
   }
   const copy = async () => {
-    const { id: _i, household_id: _h, created_by: _c, created_at: _d, shared: _s, file_path: _f, rating: _r, needs_review: _n, ...rest } = r
+    const { id: _i, household_id: _h, created_by: _c, created_at: _d, shared: _s, file_path: _f, photo_path: _p, rating: _r, needs_review: _n, ...rest } = r
     const { error } = await supabase.from('recipes').insert({ ...rest, copied_from: r.id, author_name: profile.display_name, shared: false })
     if (error) return toast('Erreur : ' + error.message)
     toast('Ajoutée à vos recettes'); onChanged()
+  }
+  const setPhoto = async (file) => {
+    try {
+      const path = await uploadFile(await resizeImage(file, 1200, 0.8), household.id)
+      const old = r.photo_path
+      await update({ photo_path: path })
+      if (old && old !== r.file_path) await supabase.storage.from('recipe-files').remove([old])
+      toast('Photo ajoutée')
+    } catch (e) { toast('Erreur : ' + e.message) }
   }
   const openFile = async () => {
     const { data: d } = await supabase.storage.from('recipe-files').createSignedUrl(r.file_path, 3600)
@@ -164,6 +216,7 @@ export function RecipeDetail({ recipe, data, onClose, onChanged, unsaved, servin
 
   return (
     <Sheet title={r.title} onClose={onClose}>
+      <DetailPhoto r={r} mine={mine && !unsaved} onPhoto={setPhoto} />
       <div className="meta big">
         <StatsLine s={s} prep={r.prep_minutes} />
         {r.servings && <span>Recette pour {fmtNum(r.servings)}</span>}
@@ -326,7 +379,8 @@ export function RecipeEditor({ initial, onClose, onSaved }) {
     ...initial,
     ingredients: (initial.ingredients || []).map((i) => ({ ...i })),
     stepsText: (initial.steps || []).join('\n'),
-    tagsText: (initial.tags || []).join(', '),
+    tagSet: (initial.tags || []).map(canonTag).filter((t) => TAGS.includes(t)),
+    tagsText: (initial.tags || []).map(canonTag).filter((t) => !TAGS.includes(t)).join(', '),
   })
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setR((x) => ({ ...x, [k]: v }))
@@ -342,17 +396,17 @@ export function RecipeEditor({ initial, onClose, onSaved }) {
         unit: i.unit || null, category: i.category || 'Autre',
       })),
       steps: r.stepsText.split('\n').map((s) => s.trim()).filter(Boolean),
-      tags: r.tagsText.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+      tags: [...new Set([...r.tagSet, ...r.tagsText.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)])].slice(0, 15),
       health_notes: r.health_notes || null, source_url: safeUrl(r.source_url || '') || null, file_path: r.file_path || null,
       needs_review: false,
     }
     const q = initial.id
-      ? supabase.from('recipes').update(row).eq('id', initial.id)
-      : supabase.from('recipes').insert({ ...row, author_name: profile.display_name })
-    const { error } = await q
+      ? supabase.from('recipes').update(row).eq('id', initial.id).select().single()
+      : supabase.from('recipes').insert({ ...row, author_name: profile.display_name }).select().single()
+    const { data: saved, error } = await q
     setBusy(false)
     if (error) return toast('Erreur : ' + error.message)
-    onSaved()
+    onSaved(saved)
   }
 
   return (
@@ -380,7 +434,16 @@ export function RecipeEditor({ initial, onClose, onSaved }) {
         <button className="btn sm" onClick={() => set('ingredients', [...r.ingredients, { name: '', quantity: '', unit: '', category: 'Autre' }])}><Icon name="plus" size={16} /> Ingrédient</button>
       </div>
       <Field label="Étapes (une par ligne)"><textarea rows={7} value={r.stepsText} onChange={(e) => set('stepsText', e.target.value)} /></Field>
-      <Field label="Mots-clés (séparés par des virgules)"><input value={r.tagsText} onChange={(e) => set('tagsText', e.target.value)} placeholder="poulet, rapide, mijoteuse" /></Field>
+      <h3>Étiquettes</h3>
+      {TAG_GROUPS.map(([g, list]) => (
+        <div key={g} className="tag-group"><small>{g}</small>
+          <div className="chips wrap">{list.map((t) => (
+            <button key={t} type="button" className={`chip ${r.tagSet.includes(t) ? 'on' : ''}`}
+              onClick={() => set('tagSet', r.tagSet.includes(t) ? r.tagSet.filter((x) => x !== t) : [...r.tagSet, t])}>{t}</button>
+          ))}</div>
+        </div>
+      ))}
+      <Field label="Autres mots-clés (séparés par des virgules)"><input value={r.tagsText} onChange={(e) => set('tagsText', e.target.value)} placeholder="poulet, mexicain" /></Field>
       <Field label="Notes santé"><input value={r.health_notes || ''} onChange={(e) => set('health_notes', e.target.value)} /></Field>
       <Field label="Lien source"><input value={r.source_url || ''} onChange={(e) => set('source_url', e.target.value)} /></Field>
     </Sheet>

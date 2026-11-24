@@ -22,14 +22,16 @@ function seed() {
     } }],
     profiles: [{ id: 'ami-1', display_name: 'Julie', household_id: 'autre' }],
     recipes: [
-      r('Poulet au beurre allégé', 35, ['poulet', 'indien'], [['poitrine de poulet', 800, 'g', 'Viandes et poissons'], ['yogourt grec', 1, 'tasse', 'Produits laitiers et oeufs'], ['tomates broyées', 1, 'boîte', 'Conserves et sauces']], { shared: true, rating: 5, health_notes: 'Riche en protéines, servir avec chou-fleur en riz.' }),
-      r('Tacos de porc effiloché', 30, ['porc', 'mexicain'], [['porc haché', 500, 'g', 'Viandes et poissons'], ['tortillas', 8, null, 'Boulangerie'], ['avocat', 2, null, 'Fruits et légumes']]),
-      r('Saumon teriyaki et brocoli', 25, ['poisson', 'rapide'], [['filet de saumon', 4, null, 'Viandes et poissons'], ['brocoli', 1, null, 'Fruits et légumes'], ['sauce soya', 3, 'c. à soupe', 'Conserves et sauces']], { rating: 4 }),
-      r('Chili végé aux haricots noirs', 40, ['végé', 'mijoté'], [['haricots noirs', 2, 'boîtes', 'Conserves et sauces'], ['poivrons', 2, null, 'Fruits et légumes'], ['oignon', 1, null, 'Fruits et légumes']]),
-      r('Soupe-repas thaï au poulet', 30, ['poulet', 'asiatique', 'soupe'], [['cuisses de poulet', 600, 'g', 'Viandes et poissons'], ['lait de coco', 1, 'boîte', 'Conserves et sauces'], ['pâte de cari rouge', 2, 'c. à soupe', 'Épices et condiments']], { household_id: 'autre', author_name: 'Julie', shared: true }),
+      r('Poulet au beurre allégé', 35, ['Plat principal', 'Riche en protéines', 'Faible en glucides', 'poulet'], [['poitrine de poulet', 800, 'g', 'Viandes et poissons'], ['yogourt grec', 1, 'tasse', 'Produits laitiers et oeufs'], ['tomates broyées', 1, 'boîte', 'Conserves et sauces']], { shared: true, rating: 5, health_notes: 'Riche en protéines, servir avec chou-fleur en riz.' }),
+      r('Tacos de porc effiloché', 30, ['Plat principal', 'Rapide', 'porc'], [['porc haché', 500, 'g', 'Viandes et poissons'], ['tortillas', 8, null, 'Boulangerie'], ['avocat', 2, null, 'Fruits et légumes']]),
+      r('Saumon teriyaki et brocoli', 25, ['Plat principal', 'Rapide', 'Sans lactose', 'Faible en glucides'], [['filet de saumon', 4, null, 'Viandes et poissons'], ['brocoli', 1, null, 'Fruits et légumes'], ['sauce soya', 3, 'c. à soupe', 'Conserves et sauces']], { rating: 4 }),
+      r('Chili végé aux haricots noirs', 40, ['Plat principal', 'Végé', 'Se congèle', 'Mijoteuse'], [['haricots noirs', 2, 'boîtes', 'Conserves et sauces'], ['poivrons', 2, null, 'Fruits et légumes'], ['oignon', 1, null, 'Fruits et légumes']]),
+      r('Crème de courge rôtie', 45, ['Soupe', 'Végé', 'Se congèle'], [['courge butternut', 1, null, 'Fruits et légumes'], ['bouillon de légumes', 1, 'l', 'Conserves et sauces'], ['oignon', 1, null, 'Fruits et légumes']], { description: 'Veloutée, parfumée au gingembre.' }),
+      r('Salade de chou croquante', 15, ['Accompagnement', 'Salade', 'Rapide', 'Végé'], [['chou vert', 0.5, null, 'Fruits et légumes'], ['carottes', 2, null, 'Fruits et légumes'], ['vinaigre de cidre', 2, 'c. à soupe', 'Conserves et sauces']]),
+      r('Soupe-repas thaï au poulet', 30, ['Soupe', 'Sans lactose', 'poulet'], [['cuisses de poulet', 600, 'g', 'Viandes et poissons'], ['lait de coco', 1, 'boîte', 'Conserves et sauces'], ['pâte de cari rouge', 2, 'c. à soupe', 'Épices et condiments']], { household_id: 'autre', author_name: 'Julie', shared: true }),
     ],
     inventory_items: [
-      { id: uid(), household_id: hh, name: 'Porc haché', quantity: 2, unit: 'paquets de 500 g', location: 'Congélateur', category: 'Viandes et poissons', added_on: iso(-70), best_before: iso(20) },
+      { id: uid(), household_id: hh, label_code: 'K7M2QX', name: 'Porc haché', quantity: 2, unit: 'paquets de 500 g', location: 'Congélateur', category: 'Viandes et poissons', added_on: iso(-70), best_before: iso(20) },
       { id: uid(), household_id: hh, name: 'Poitrines de poulet', quantity: 6, unit: 'unités', location: 'Congélateur', category: 'Viandes et poissons', added_on: iso(-20), best_before: iso(120) },
       { id: uid(), household_id: hh, name: 'Brocoli surgelé', quantity: 1, unit: 'sac', location: 'Congélateur', category: 'Surgelés', added_on: iso(-10), best_before: iso(5) },
       { id: uid(), household_id: hh, name: 'Riz basmati', quantity: 2, unit: 'kg', location: 'Garde-manger', category: 'Épicerie sèche', added_on: iso(-30) },
@@ -108,6 +110,7 @@ class Query {
   then(res, rej) { return new Promise((r) => setTimeout(() => r(this.run()), 120)).then(res, rej) }
 }
 
+const blobs = new Map()
 const authSubs = new Set()
 const emit = (ev) => authSubs.forEach((cb) => cb(ev, db.session))
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -173,8 +176,8 @@ export function createMock() {
     },
     storage: {
       from: () => ({
-        async upload(path) { await wait(200); return { data: { path }, error: null } },
-        async createSignedUrl() { return { data: { signedUrl: '#' }, error: null } },
+        async upload(path, file) { await wait(200); try { blobs.set(path, URL.createObjectURL(file)) } catch { /* */ } return { data: { path }, error: null } },
+        async createSignedUrl(path) { return { data: { signedUrl: blobs.get(path) || '#' }, error: null } },
         async remove() { return { error: null } },
       }),
     },
@@ -202,11 +205,28 @@ export function createMock() {
           if (body.action === 'backup') return { data: { format: 'au-menu-backup', demo: true, ...db }, error: null }
           return { data: { ok: true }, error: null }
         }
+        if (body.action === 'suggest') {
+          await wait(800)
+          const q = body.query || 'souper'
+          const mk = (title, min, tags, url, desc) => ({ title, prep_minutes: min, servings: 4, tags, source_url: url, description: desc, health_notes: '',
+            ingredients: [{ name: 'lentilles corail', quantity: 1, unit: 'tasse', category: 'Épicerie sèche' }, { name: 'carottes', quantity: 3, unit: null, category: 'Fruits et légumes' }],
+            steps: ['Faire revenir les légumes.', 'Ajouter le reste et mijoter 20 minutes.', 'Rectifier l\'assaisonnement.'] })
+          return { data: { recipes: [
+            mk(`Soupe de lentilles corail (${q})`, 30, ['Soupe', 'Végé', 'Sans lactose', 'Se congèle'], body.mode === 'invent' ? null : 'https://www.ricardocuisine.com/recettes/exemple', 'Douce et épicée, prête en 30 minutes.'),
+            mk('Bol de poulet au cari vert', 25, ['Plat principal', 'Rapide', 'Sans lactose'], body.mode === 'invent' ? null : 'https://www.troisfoisparjour.com/exemple', 'Un bol coloré du soir de semaine.'),
+            mk('Galettes de saumon et salade', 20, ['Plat principal', 'Rapide', 'Faible en glucides', 'Riche en protéines'], null, 'Idée de Claude, faible en glucides.'),
+          ] }, error: null }
+        }
+        if (body.action === 'tag_recipes') {
+          let n = 0
+          db.recipes.filter((r) => r.household_id === myHH() && !(r.tags || []).some((t) => /^[A-ZÉ]/.test(t))).forEach((r) => { r.tags = ['Plat principal', ...(r.tags || [])]; n++ })
+          save(); return { data: { tagged: n, remaining: 0 }, error: null }
+        }
         if (body.action === 'plan_week') return { data: { plan: fakePlan(body.dates) }, error: null }
         if (body.action.startsWith('import_')) return { data: { recipe: {
           title: 'Pâté chinois revisité', description: 'Version démo extraite automatiquement.', servings: 6, prep_minutes: 50,
           ingredients: [{ name: 'boeuf haché', quantity: 1, unit: 'lb', category: 'Viandes et poissons' }, { name: 'maïs en crème', quantity: 1, unit: 'boîte', category: 'Conserves et sauces' }, { name: 'chou-fleur', quantity: 1, unit: null, category: 'Fruits et légumes' }],
-          steps: ['Cuire le boeuf.', 'Étager avec le maïs.', 'Couvrir de purée de chou-fleur et gratiner.'], tags: ['boeuf', 'classique'], health_notes: 'Purée de chou-fleur au lieu de pommes de terre : moins de glucides.' } }, error: null }
+          steps: ['Cuire le boeuf.', 'Étager avec le maïs.', 'Couvrir de purée de chou-fleur et gratiner.'], tags: ['Plat principal', 'Se congèle', 'Faible en glucides'], health_notes: 'Purée de chou-fleur au lieu de pommes de terre : moins de glucides.' } }, error: null }
         if (body.action === 'shopping_list') {
           const plan = db.meal_plans.find((p) => p.id === body.plan_id)
           db.shopping_items = db.shopping_items.filter((i) => i.plan_id !== plan.id)

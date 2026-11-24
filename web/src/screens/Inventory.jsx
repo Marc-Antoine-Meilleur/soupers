@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { supabase, LOCATIONS, CATEGORIES, today, daysBetween, parseQuick, guessCategory, parseTable, parseDate, parseQtyUnit, normLocation } from '../lib'
 import { FeedbackButton } from '../shared'
 import { useApp } from '../App'
 import { Icon, Sheet, Spinner, Empty, Header, Field, Segmented } from '../ui'
+// Chargés seulement au besoin (bibliothèques QR)
+const Scanner = lazy(() => import('./Labels').then((m) => ({ default: m.Scanner })))
+const LabelAction = lazy(() => import('./Labels').then((m) => ({ default: m.LabelAction })))
+const PrintLabels = lazy(() => import('./Labels').then((m) => ({ default: m.PrintLabels })))
 
 function ageBadge(item) {
   const t = today()
@@ -19,8 +23,9 @@ function ageBadge(item) {
 }
 
 export default function Inventory() {
-  const { toast } = useApp()
+  const { toast, pendingLabel, setPendingLabel } = useApp()
   const [items, setItems] = useState(null)
+  const [scan, setScan] = useState(null) // null | 'scan' | 'print' | { code } | { series }
   const [loc, setLoc] = useState('Congélateur')
   const [editing, setEditing] = useState(null)
   const [quick, setQuick] = useState('')
@@ -43,6 +48,8 @@ export default function Inventory() {
     setItems(data || [])
   }
   useEffect(() => { load() }, [])
+  // Étiquette ouverte par lien (?e=CODE)
+  useEffect(() => { if (pendingLabel) { setScan({ code: pendingLabel }); setPendingLabel(null) } }, [pendingLabel]) // eslint-disable-line
 
   const adjust = async (it, delta) => {
     const quantity = Math.max(0, Math.round((Number(it.quantity) + delta) * 100) / 100)
@@ -62,7 +69,7 @@ export default function Inventory() {
   return (
     <>
       <Header title="Inventaire" sub="Ce que vous avez déjà à la maison"
-        action={<div className="head-actions"><FeedbackButton screen="Inventaire" /><button className="btn sm" onClick={() => setPasting(true)}><Icon name="table" size={16} /> Excel</button><button className="icon-btn" onClick={() => setEditing({ location: loc, quantity: 1, added_on: today() })} aria-label="Ajout détaillé"><Icon name="edit" /></button></div>} />
+        action={<div className="head-actions"><FeedbackButton screen="Inventaire" /><button className="icon-btn" onClick={() => setScan('scan')} aria-label="Scanner une étiquette QR"><Icon name="qr" /></button><button className="icon-btn" onClick={() => setPasting(true)} aria-label="Importer depuis Excel"><Icon name="table" /></button><button className="icon-btn" onClick={() => setEditing({ location: loc, quantity: 1, added_on: today() })} aria-label="Ajout détaillé"><Icon name="edit" /></button></div>} />
       <Segmented value={loc} onChange={setLoc} options={LOCATIONS.map((l) => [l, `${l.replace('Réfrigérateur', 'Frigo')}${counts[l] ? ` (${counts[l]})` : ''}`])} />
       <form className="quickbar" onSubmit={quickAdd}>
         <input value={quick} onChange={(e) => setQuick(e.target.value)} placeholder={`Ajout rapide : 2 paquets porc haché`} aria-label={`Ajouter au ${loc.toLowerCase()}`} enterKeyHint="done" />
@@ -78,7 +85,7 @@ export default function Inventory() {
             <li key={it.id} className="card inv-row">
               <div className="grow" onClick={() => setEditing(it)}>
                 <h3>{it.name}</h3>
-                <div className="meta">{it.category && <span>{it.category}</span>}{ageBadge(it)}</div>
+                <div className="meta">{it.label_code && <span className="code-badge sm">{it.label_code}</span>}{it.category && <span>{it.category}</span>}{ageBadge(it)}</div>
                 {it.notes && <p className="reason">{it.notes}</p>}
               </div>
               <div className="qty">
@@ -91,36 +98,52 @@ export default function Inventory() {
         </ul>
       )}
       {pasting && <PasteImport defaultLocation={loc} onClose={() => setPasting(false)} onDone={(n) => { setPasting(false); load(); toast(`${n} article(s) importé(s)`) }} />}
-      {editing && <ItemEditor item={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
+      {editing && <ItemEditor item={editing} onClose={() => setEditing(null)} onSaved={(again) => { setEditing(null); load(); if (again) setScan({ series: true }) }} />}
+      <Suspense fallback={<Spinner />}>
+      {(scan === 'scan' || scan?.series) && <Scanner title={scan?.series ? 'Étiquette suivante' : undefined} onClose={() => setScan(null)}
+        onPrint={() => setScan('print')} onCode={(code) => setScan({ code, series: scan?.series })} />}
+      {scan === 'print' && <PrintLabels onClose={() => setScan(null)} />}
+      {scan?.code && <LabelAction code={scan.code} onClose={() => setScan(null)}
+        onNew={(code) => { setScan(null); setEditing({ label_code: code, location: 'Congélateur', quantity: 1, added_on: today(), _series: true }) }}
+        onEdit={(it) => { setScan(null); setEditing(it) }} onDone={() => { setScan(null); load() }} />}
+      </Suspense>
     </>
   )
 }
 
-function ItemEditor({ item, onClose, onSaved }) {
+export function ItemEditor({ item, onClose, onSaved }) {
   const { toast } = useApp()
   const [f, setF] = useState({ name: '', unit: '', category: '', best_before: '', notes: '', ...item })
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }))
-  const save = async () => {
+  const save = async (again) => {
     const row = {
       name: f.name.trim(), quantity: Number(f.quantity) || 0, unit: f.unit || null, location: f.location,
       category: f.category || null, added_on: f.added_on || today(), best_before: f.best_before || null, notes: f.notes || null,
+      label_code: f.label_code || null,
     }
     const { error } = item.id
       ? await supabase.from('inventory_items').update(row).eq('id', item.id)
       : await supabase.from('inventory_items').insert(row)
-    if (error) return toast('Erreur : ' + error.message)
-    toast(item.id ? 'Modifié' : 'Ajouté à l\'inventaire'); onSaved()
+    if (error) return toast(/inventory_label_unique|duplicate/.test(error.message) ? 'Cette étiquette est déjà utilisée' : 'Erreur : ' + error.message)
+    toast(item.id ? 'Modifié' : 'Ajouté à l\'inventaire'); onSaved(again === true)
   }
   const remove = async () => {
     await supabase.from('inventory_items').delete().eq('id', item.id)
     toast('Retiré'); onSaved()
   }
   return (
-    <Sheet title={item.id ? 'Modifier' : 'Ajouter à l\'inventaire'} onClose={onClose}
+    <Sheet title={item.id ? 'Modifier' : f.label_code ? 'Nouvelle étiquette' : 'Ajouter à l\'inventaire'} onClose={onClose}
       footer={<div className="two">
         {item.id && <button className="btn danger" onClick={remove}>Supprimer</button>}
-        <button className="btn primary" disabled={!f.name.trim()} onClick={save}>Enregistrer</button>
+        {item._series && <button className="btn" disabled={!f.name.trim()} onClick={() => save(true)}>Enregistrer + suivante</button>}
+        <button className="btn primary" disabled={!f.name.trim()} onClick={() => save()}>Enregistrer</button>
       </div>}>
+      {f.label_code && (
+        <div className="label-line"><span className="code-badge">{f.label_code}</span>
+          <span className="muted small">{item.id ? 'Étiquette QR liée' : 'Que contient ce sac ou ce plat?'}</span>
+          {item.id && <button className="link" onClick={() => set('label_code', null)}>Détacher</button>}
+        </div>
+      )}
       <Field label="Aliment"><input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="ex. Cuisses de poulet" autoFocus={!item.id} /></Field>
       <div className="two">
         <Field label="Quantité"><input type="number" inputMode="decimal" step="any" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} /></Field>
