@@ -215,7 +215,7 @@ export function createMock() {
           return { data: { recipes: [
             mk(`Soupe de lentilles corail (${q})`, 30, ['Soupe', 'Végé', 'Sans lactose', 'Se congèle'], body.mode === 'invent' ? null : 'https://www.ricardocuisine.com/recettes/exemple', 'Douce et épicée, prête en 30 minutes.'),
             mk('Bol de poulet au cari vert', 25, ['Plat principal', 'Rapide', 'Sans lactose'], body.mode === 'invent' ? null : 'https://www.troisfoisparjour.com/exemple', 'Un bol coloré du soir de semaine.'),
-            mk('Galettes de saumon et salade', 20, ['Plat principal', 'Rapide', 'Faible en glucides', 'Riche en protéines'], null, 'Idée de Claude, faible en glucides.'),
+            mk('Galettes de saumon et salade', 20, ['Plat principal', 'Rapide', 'Faible en glucides', 'Riche en protéines'], null, 'Nouvelle idée, faible en glucides.'),
           ] }, error: null }
         }
         if (body.action === 'tag_recipes') {

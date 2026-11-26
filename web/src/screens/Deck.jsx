@@ -5,7 +5,7 @@ import { useApp } from '../App'
 import { Icon, Sheet } from '../ui'
 import { StatsLine } from './Cook'
 import { RecipeDetail } from './Recipes'
-import { QuickAdd, AskClaude } from './Add'
+import { QuickAdd, FindIdeas } from './Add'
 
 const FILTERS = ['Soupe', 'Plat principal', 'Rapide', 'Faible en glucides', 'Végé', 'Sans lactose', 'Mijoteuse', 'Se congèle']
 const TONES = { Soupe: 'ochre', Salade: 'sage', Accompagnement: 'sage', Sauce: 'red', Dessert: 'rose', Déjeuner: 'ochre' }
@@ -26,7 +26,7 @@ export function RecipeCard({ r, stats, fav, uses, style, className = '', ...rest
       {url && <img src={url} alt="" draggable="false" />}
       <div className="rcard-top">
         {type && <span className="rcard-type">{type}</span>}
-        {r._idea && <span className="rcard-type idea">{r.source_url ? 'Trouvée en ligne' : 'Idée de Claude'}</span>}
+        {r._idea && <span className="rcard-type idea">{r.source_url ? 'Trouvée en ligne' : 'Nouvelle idée'}</span>}
         {fav && <span className="rcard-fav">♥</span>}
       </div>
       <div className="rcard-body">
@@ -168,7 +168,7 @@ export default function Deck({ mode, data, days = [], entries = [], startDay, ma
           <div className="rcard end">
             <h2>Pas trouvé ?</h2>
             <p className="muted">Ajoutez une recette ou demandez des idées.</p>
-            <button className="btn primary block" onClick={() => setMore('ask')}><Icon name="spark" size={18} /> Demander à Claude</button>
+            <button className="btn primary block" onClick={() => setMore('ask')}><Icon name="search" size={18} /> Trouver des idées</button>
             <button className="btn block" onClick={() => setMore('add')}><Icon name="link" size={18} /> Lien ou photo</button>
             {filters.length > 0 && <button className="btn block" onClick={() => setFilters([])}>Retirer les filtres</button>}
             {seen.size > 0 && <button className="link center" onClick={reset}>Revoir toutes les cartes</button>}
@@ -195,13 +195,13 @@ export default function Deck({ mode, data, days = [], entries = [], startDay, ma
             if (tonight) setDetail(r)
           }} />
           <div className="or">ou</div>
-          <AskClaude tags={filters} onResults={addIdeas} />
+          <FindIdeas tags={filters} onResults={addIdeas} />
         </Sheet>
       )}
       {more === 'ask' && (
-        <Sheet title="Demander à Claude" onClose={() => setMore(null)}>
+        <Sheet title="Trouver des idées" onClose={() => setMore(null)}>
           <p className="muted small">Les idées apparaissent comme des cartes. Glissez à droite pour les garder : elles s'ajoutent à vos recettes.</p>
-          <AskClaude tags={filters} onResults={addIdeas} />
+          <FindIdeas tags={filters} onResults={addIdeas} />
         </Sheet>
       )}
       {detail && (

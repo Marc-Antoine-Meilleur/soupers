@@ -42,8 +42,8 @@ export function QuickAdd({ onSaved, compact }) {
   )
 }
 
-// Demander des idées à Claude : recettes inventées et/ou trouvées sur le web
-export function AskClaude({ onResults, initial = '', tags = [] }) {
+// Idées de recettes : nouvelles ou trouvées sur le web
+export function FindIdeas({ onResults, initial = '', tags = [] }) {
   const [q, setQ] = useState(initial)
   const [mode, setMode] = useState('both')
   const [busy, setBusy] = useState(false)
@@ -60,14 +60,14 @@ export function AskClaude({ onResults, initial = '', tags = [] }) {
   }
   const google = () => window.open(`https://www.google.com/search?q=${encodeURIComponent('recette ' + (query || 'souper'))}`, '_blank', 'noopener')
 
-  if (busy) return <Spinner label={mode === 'invent' ? 'Claude imagine 3 recettes…' : 'Claude cherche en ligne… (jusqu’à 1 minute)'} />
+  if (busy) return <Spinner label={mode === 'invent' ? 'Préparation de 3 idées…' : 'Recherche en ligne… (jusqu’à 1 minute)'} />
   return (
     <div className="ask">
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Une envie? ex. soupe réconfortante aux lentilles" enterKeyHint="search"
         onKeyDown={(e) => e.key === 'Enter' && query && ask()} />
-      <Segmented value={mode} onChange={setMode} options={[['both', 'Recettes du web'], ['invent', 'Inventées par Claude']]} />
+      <Segmented value={mode} onChange={setMode} options={[['both', 'Recettes du web'], ['invent', 'Nouvelles idées']]} />
       <div className="two">
-        <button className="btn primary" disabled={!query} onClick={ask}><Icon name="spark" size={18} /> 3 idées</button>
+        <button className="btn primary" disabled={!query} onClick={ask}><Icon name="search" size={18} /> 3 idées</button>
         <button className="btn" onClick={google}><Icon name="globe" size={18} /> Google</button>
       </div>
       <p className="muted small">Google ouvre une recherche : copiez le lien d'une recette, puis collez-le ici.</p>

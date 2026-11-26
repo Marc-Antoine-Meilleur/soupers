@@ -5,7 +5,7 @@ import { useApp } from '../App'
 import { Icon, Sheet, Spinner, Header } from '../ui'
 import { RecipeDetail, RecipeEditor, useRecipeData } from './Recipes'
 import Deck from './Deck'
-import { QuickAdd, AskClaude } from './Add'
+import { QuickAdd, FindIdeas } from './Add'
 
 export default function Week() {
   const { household, go, toast } = useApp()
@@ -141,7 +141,7 @@ export default function Week() {
         <button className="icon-btn" onClick={() => setWeek(addDays(week, 7))} aria-label="Semaine suivante"><Icon name="next" /></button>
       </div>
 
-      {plan === undefined ? <Spinner /> : busy === 'all' ? <Spinner label="Claude complète vos soupers… (environ 30 secondes)" /> : (
+      {plan === undefined ? <Spinner /> : busy === 'all' ? <Spinner label="Préparation de vos soupers… (environ 30 secondes)" /> : (
         <>
           {plan?.summary && <p className="summary">{plan.summary}</p>}
           {entries.length > 0 && (
@@ -180,7 +180,7 @@ export default function Week() {
           </ul>
 
           {!isPast && emptyCount > 0 && (
-            <button className="btn block ghost-ai" onClick={() => setAiFill(true)}><Icon name="spark" size={18} /> Compléter {emptyCount === planDays.length ? 'la semaine' : `les ${emptyCount} soir${emptyCount > 1 ? 's' : ''} vide${emptyCount > 1 ? 's' : ''}`} avec Claude</button>
+            <button className="btn block ghost-ai" onClick={() => setAiFill(true)}><Icon name="calendar" size={18} /> Compléter {emptyCount === planDays.length ? 'la semaine' : `les ${emptyCount} soir${emptyCount > 1 ? 's' : ''} vide${emptyCount > 1 ? 's' : ''}`} automatiquement</button>
           )}
 
           {plan?.status === 'approuvé' && plan.thaw?.length > 0 && (
@@ -209,9 +209,9 @@ export default function Week() {
       )}
 
       {aiFill && (
-        <Sheet title="Compléter avec Claude" onClose={() => setAiFill(false)}
-          footer={<button className="btn primary block" onClick={generate}><Icon name="spark" size={18} /> Proposer {emptyCount} souper{emptyCount > 1 ? 's' : ''}</button>}>
-          <p className="muted">Claude choisit pour les soirs vides, dans vos recettes et celles de la communauté, en utilisant d'abord ce qui est au congélateur. Les soupers déjà choisis restent.</p>
+        <Sheet title="Compléter automatiquement" onClose={() => setAiFill(false)}
+          footer={<button className="btn primary block" onClick={generate}><Icon name="check" size={18} /> Proposer {emptyCount} souper{emptyCount > 1 ? 's' : ''}</button>}>
+          <p className="muted">Des soupers sont proposés pour les soirs vides, dans vos recettes et celles de la communauté, en utilisant d'abord ce qui est au congélateur. Les soupers déjà choisis restent.</p>
           <p className="small muted">{s.servings} portions · max {s.max_minutes_weekday} min en semaine{(s.health || []).length > 0 && <> · {s.health.join(', ')}</>}
             {' '}<button className="link" onClick={() => { setAiFill(false); setCriteria(true) }}>Critères</button></p>
           <label className="field"><span>Quelque chose de spécial? (optionnel)</span>
@@ -264,14 +264,14 @@ function AddToDay({ date, recipes, data, onClose, onSwipe, onPick, onRecipe }) {
       <button className="btn primary block" onClick={onSwipe}><Icon name="cards" size={18} /> Glisser des idées</button>
       <h3>Lien ou photo</h3>
       <QuickAdd compact onSaved={onRecipe} />
-      <h3>Demander à Claude</h3>
+      <h3>Trouver des idées</h3>
       {ideas ? (
         <ul className="list ideas">
           {ideas.map((r, k) => (
             <li key={k} className="card recipe-row">
               <div className="grow" onClick={() => setPeek(r)}>
                 <h3>{r.title}</h3>
-                <div className="meta">{r.prep_minutes && <span><Icon name="clock" size={14} /> {r.prep_minutes} min</span>}<span>{r.source_url ? new URL(r.source_url).hostname.replace('www.', '') : 'Idée de Claude'}</span></div>
+                <div className="meta">{r.prep_minutes && <span><Icon name="clock" size={14} /> {r.prep_minutes} min</span>}<span>{r.source_url ? new URL(r.source_url).hostname.replace('www.', '') : 'Nouvelle idée'}</span></div>
                 {r.description && <p className="reason">{r.description}</p>}
               </div>
               <button className="btn sm primary" onClick={() => keepIdea(r)}>Ajouter</button>
@@ -279,7 +279,7 @@ function AddToDay({ date, recipes, data, onClose, onSwipe, onPick, onRecipe }) {
           ))}
           <li><button className="link" onClick={() => setIdeas(null)}>Autre demande</button></li>
         </ul>
-      ) : <AskClaude onResults={setIdeas} />}
+      ) : <FindIdeas onResults={setIdeas} />}
       <h3>Dans mes recettes</h3>
       <div className="search"><Icon name="search" size={18} /><input placeholder="Chercher une recette…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
       <ul className="pick">

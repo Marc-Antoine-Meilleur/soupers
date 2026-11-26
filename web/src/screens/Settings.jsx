@@ -45,7 +45,7 @@ export default function Settings() {
     const text = `Commentaires sur l'app AU MENU (v${APP_VERSION}) :\n\n` +
       open.map((f) => `- [${f.screen || '?'}] ${f.message} (${f.author_name || ''}, ${f.created_at.slice(0, 10)}, v${f.app_version || '?'})`).join('\n')
     await navigator.clipboard.writeText(text)
-    toast(`${open.length} commentaire(s) copié(s) — collez-les dans Claude`)
+    toast(`${open.length} commentaire(s) copié(s) `)
   }
   const markDone = async () => {
     const ids = feedback.filter((f) => !f.done).map((f) => f.id)
@@ -60,7 +60,7 @@ export default function Settings() {
       <Header title="Réglages" action={<FeedbackButton screen="Réglages" />} />
       {profile.is_admin && (
         <button className="card admin-link" onClick={() => go('admin')}>
-          <Icon name="shield" /><span><b>Administration</b><small>Utilisateurs, coûts de l'IA, sauvegarde</small></span><Icon name="next" size={18} />
+          <Icon name="shield" /><span><b>Administration</b><small>Utilisateurs, coûts, sauvegarde</small></span><Icon name="next" size={18} />
         </button>
       )}
 
@@ -97,7 +97,7 @@ export default function Settings() {
 
       <section className="card">
         <h2>Commentaires ({openFeedback.length})</h2>
-        <p className="muted small">Notez vos irritants avec le bouton <Icon name="chat" size={14} /> en haut de chaque écran. Pour la prochaine version, copiez-les et collez-les dans votre conversation avec Claude.</p>
+        <p className="muted small">Notez vos irritants avec le bouton <Icon name="chat" size={14} /> en haut de chaque écran. Pour la prochaine version, copiez-les et transmettez-les.</p>
         {openFeedback.length > 0 && (
           <>
             <ul className="plain feedback-list">{openFeedback.slice(0, 8).map((f) => (

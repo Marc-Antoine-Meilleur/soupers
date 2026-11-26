@@ -102,7 +102,7 @@ const RECIPE_SCHEMA = `{
 // ---------- Appel à Claude ----------
 async function claude(model: string, system: string, content: unknown, maxTokens = 8000, tools?: unknown[]) {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) throw new UserError("L'IA n'est pas configurée (clé manquante).");
+  if (!key) throw new UserError("Service non configuré. Avisez l'administrateur.");
   const messages: any[] = [{ role: "user", content }];
   let data: any = null;
   for (let turn = 0; turn < 3; turn++) {
@@ -114,9 +114,9 @@ async function claude(model: string, system: string, content: unknown, maxTokens
     });
     if (!res.ok) {
       console.error("Anthropic", res.status, (await res.text()).slice(0, 500));
-      if (res.status === 429) throw new UserError("L'IA est occupée, réessayez dans une minute.");
-      if (res.status === 400 || res.status === 402) throw new UserError("Service IA indisponible (crédits ou configuration). Avisez l'administrateur.");
-      throw new UserError("Service IA temporairement indisponible.");
+      if (res.status === 429) throw new UserError("Le service est occupé, réessayez dans une minute.");
+      if (res.status === 400 || res.status === 402) throw new UserError("Service indisponible pour le moment. Avisez l'administrateur.");
+      throw new UserError("Service temporairement indisponible.");
     }
     data = await res.json();
     await logCall(model, data.usage);
@@ -132,8 +132,8 @@ function parseJson(text: string) {
   const raw = fenced ? fenced[1] : text;
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
-  if (start < 0 || end < 0) throw new UserError("Réponse de l'IA illisible, réessayez.");
-  try { return JSON.parse(raw.slice(start, end + 1)); } catch { throw new UserError("Réponse de l'IA illisible, réessayez."); }
+  if (start < 0 || end < 0) throw new UserError("Lecture impossible, réessayez.");
+  try { return JSON.parse(raw.slice(start, end + 1)); } catch { throw new UserError("Lecture impossible, réessayez."); }
 }
 
 // ---------- Nettoyage des sorties de l'IA (ne jamais faire confiance au contenu) ----------
@@ -274,7 +274,7 @@ Deno.serve(async (req) => {
 
     // Quota quotidien par foyer (protège contre les coûts imprévus)
     const { data: ok } = await supabase.rpc("consume_ai_quota");
-    if (!ok) throw new UserError("Limite quotidienne d'utilisation de l'IA atteinte pour votre foyer. Réessayez demain.");
+    if (!ok) throw new UserError("Limite quotidienne d'utilisation atteinte pour votre foyer. Réessayez demain.");
 
     if (action === "import_url") {
       const html = await safeFetch(String(body.url ?? "").slice(0, 2000));

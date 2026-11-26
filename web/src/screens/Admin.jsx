@@ -6,7 +6,7 @@ import { Icon, Sheet, Spinner, Header, Field } from '../ui'
 const usd = (n) => `${(n || 0).toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`
 const usd4 = (n) => `${(n || 0).toLocaleString('fr-CA', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} $`
 const tok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2).replace('.', ',')} M` : n >= 1e3 ? `${Math.round(n / 1e3)} k` : String(n || 0))
-const ACTIONS = { plan_week: 'Plans de semaine', shopping_list: "Listes d'épicerie", import_url: 'Import de liens', import_file: 'Import PDF/photos', import_text: 'Import de texte', suggest: 'Idées de Claude', tag_recipes: 'Étiquetage' }
+const ACTIONS = { plan_week: 'Plans de semaine', shopping_list: "Listes d'épicerie", import_url: 'Import de liens', import_file: 'Import PDF/photos', import_text: 'Import de texte', suggest: 'Idées de recettes', tag_recipes: 'Étiquetage' }
 
 export default function Admin() {
   const { go, toast, session } = useApp()
@@ -114,7 +114,7 @@ export default function Admin() {
       <Header title="Administration" sub={`${d.users.length} utilisateurs · ${d.households.length} foyers`} />
 
       <section className="card">
-        <h2>Coûts de l'IA</h2>
+        <h2>Coûts d'utilisation</h2>
         <div className="kpis">
           <div><small>Ce mois-ci</small><b>{usd(fin.thisMonth)}</b></div>
           <div><small>Depuis le début</small><b>{usd(fin.total)}</b></div>
@@ -145,7 +145,7 @@ export default function Admin() {
         <h2>Réglages</h2>
         <div className="two">
           <Field label="Crédits achetés au total ($ US)" hint="Pour estimer le solde restant"><input inputMode="decimal" value={cfg.credits_usd} onChange={(e) => setCfg({ ...cfg, credits_usd: e.target.value.replace(',', '.') })} /></Field>
-          <Field label="Limite IA par foyer / jour" hint="Protection contre les abus"><input inputMode="numeric" value={cfg.ai_daily_limit} onChange={(e) => setCfg({ ...cfg, ai_daily_limit: e.target.value.replace(/\D/g, '') })} /></Field>
+          <Field label="Limite d'utilisation par foyer / jour" hint="Protection contre les abus"><input inputMode="numeric" value={cfg.ai_daily_limit} onChange={(e) => setCfg({ ...cfg, ai_daily_limit: e.target.value.replace(/\D/g, '') })} /></Field>
         </div>
         <Field label="Code de la communauté" hint="Permet à un utilisateur sans foyer de créer le sien (placé dans la première communauté)"><input value={cfg.group_code} onChange={(e) => setCfg({ ...cfg, group_code: e.target.value })} /></Field>
         <button className="btn primary sm" onClick={saveCfg}>Enregistrer</button>
@@ -214,7 +214,7 @@ export default function Admin() {
 
       <section className="card">
         <h2>Sauvegarde</h2>
-        <p className="muted small">Télécharge toutes les données (recettes, avis, inventaires, menus, coûts, comptes) dans un fichier JSON. En cas de panne, donnez ce fichier à Claude pour tout restaurer. Les PDF et photos restent dans Supabase (leur liste est incluse). Conservez ce fichier en lieu sûr : il contient les courriels des membres.</p>
+        <p className="muted small">Télécharge toutes les données (recettes, avis, inventaires, menus, coûts, comptes) dans un fichier JSON. En cas de panne, ce fichier permet de tout restaurer. Les PDF et photos restent dans Supabase (leur liste est incluse). Conservez ce fichier en lieu sûr : il contient les courriels des membres.</p>
         <button className="btn block" onClick={backup}><Icon name="download" size={18} /> Télécharger une sauvegarde</button>
       </section>
 

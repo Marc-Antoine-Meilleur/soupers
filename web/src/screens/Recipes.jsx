@@ -109,12 +109,12 @@ export default function Recipes() {
       </div>
       {untagged > 0 && (
         <div className="note tagnote">{untagged} recette{untagged > 1 ? 's' : ''} sans étiquette (Soupe, Rapide, Végé…).
-          <button className="btn sm" disabled={tagging} onClick={autoTag}>{tagging ? 'Étiquetage…' : 'Étiqueter avec Claude'}</button></div>
+          <button className="btn sm" disabled={tagging} onClick={autoTag}>{tagging ? 'Étiquetage…' : 'Étiqueter automatiquement'}</button></div>
       )}
       {!recipes ? <Spinner /> : list.length === 0 ? (
         recipes.length === 0
           ? <Empty icon="book" title="Votre archive est vide">
-              <p>Ajoutez vos recettes préférées : liens web, PDF ou photos (plusieurs à la fois). L'IA s'en servira pour planifier vos semaines.</p>
+              <p>Ajoutez vos recettes préférées : liens web, PDF ou photos (plusieurs à la fois). Elles serviront à planifier vos semaines.</p>
               <button className="btn primary" onClick={() => setAdding(true)}>Ajouter des recettes</button>
             </Empty>
           : <Empty icon="search" title="Aucune recette ne correspond"><p>Retirez un filtre ou changez la recherche.</p></Empty>
@@ -354,7 +354,7 @@ function AddRecipe({ onClose, onSaved }) {
 
   return (
     <Sheet title="Ajouter des recettes" onClose={onClose}>
-      {busy ? <Spinner label="Lecture de la recette par l'IA…" /> : (
+      {busy ? <Spinner label="Lecture de la recette…" /> : (
         <>
           <label className="dropzone big">
             <Icon name="file" size={26} />
@@ -367,7 +367,7 @@ function AddRecipe({ onClose, onSaved }) {
           </Field>
           <div className="two">
             <button className="btn" onClick={paste}><Icon name="paste" size={18} /> Coller</button>
-            <button className="btn primary" disabled={!link && input.trim().length < 40} onClick={fromInput}><Icon name="spark" size={18} /> Importer</button>
+            <button className="btn primary" disabled={!link && input.trim().length < 40} onClick={fromInput}><Icon name="download" size={18} /> Importer</button>
           </div>
           <button className="link center" onClick={() => setManual(true)}>Écrire la recette à la main</button>
           {err && <p className="note err">{err}</p>}
