@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
           // Dernier membre : ses recettes PARTAGÉES sont conservées dans le foyer de l'admin; le reste est supprimé.
           if (me.household_id && me.household_id !== hid) {
             const { data: moved } = await admin.from("recipes")
-              .update({ household_id: me.household_id, file_path: null })
+              .update({ household_id: me.household_id, file_path: null, file_paths: null })
               .eq("household_id", hid).eq("shared", true).select("id");
             movedRecipes = moved?.length ?? 0;
           }

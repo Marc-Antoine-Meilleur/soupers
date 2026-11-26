@@ -115,3 +115,11 @@ Changements faits pour réduire les manipulations :
 - **Partage par défaut** : `recipes.shared` vaut maintenant `true` par défaut (case cochée dans l'éditeur). Les recettes copiées d'une autre personne restent privées pour éviter les doublons.
 - **Suppression d'un utilisateur** : la boîte « Tapez SUPPRIMER » (qui échouait si le texte était autocorrigé, ex. « Supprimer ») est remplacée par une fenêtre de confirmation.
 - **Semaine** : « Ajouter au menu » (plus seulement les soupers).
+
+## 8. Version 1.4 (26 novembre 2026) : recettes de plusieurs pages
+
+- Import par lot : photos et PDF ensemble (20 pages max par envoi, 10 pages max par recette). Les photos sont triées par date de prise de vue, regroupées automatiquement en recettes (action `group_pages`), puis vérifiées par l'utilisateur (couper ✂, joindre, déplacer, retirer) avant la lecture (`import_pages`, toutes les pages d'une recette lues ensemble).
+- Mode « Photographier une recette » : « Page suivante » / « Nouvelle recette » entre les photos.
+- Un PDF peut contenir plusieurs recettes : elles sont toutes importées.
+- Nouvelle colonne `recipes.file_paths` (pages originales, 20 max) ; « Voir l'original » les affiche dans l'ordre. Les pages restent dans le dossier privé du foyer (mêmes règles d'accès).
+- Interface sans mention de l'IA (v1.3.1).

@@ -484,3 +484,21 @@ table.preview th { color: var(--muted); font-weight: 650; }
 .community li > span { min-width: 0; }
 .community select { max-width: 45%; }
 .btn.danger-fill { background: var(--red); color: #fff; border-color: var(--red); }
+
+/* v1.4 : import de recettes de plusieurs pages */
+.imp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.imp-next { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+.imp-help { background: var(--bg); border-radius: 14px; padding: 12px 14px; margin-top: 12px; }
+.imp-help p { margin: 0 0 6px; }
+.imp-head h3 { margin: 14px 0 4px; }
+.imp-group { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 10px 0; }
+.imp-pages { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; }
+.imp-cell { display: flex; align-items: center; gap: 4px; }
+.imp-thumb { position: relative; width: 64px; height: 84px; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg); }
+.imp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.imp-thumb span { position: absolute; left: 4px; bottom: 4px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 0 5px; }
+.imp-cut { width: 26px; height: 26px; border-radius: 50%; border: 1px dashed var(--muted); background: var(--card); color: var(--muted); font-size: 13px; padding: 0; }
+.imp-zoom-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.imp-big { width: 100%; border-radius: 10px; display: block; }
+.orig-page { margin: 0 0 16px; }
+.orig-page img { width: 100%; border-radius: 10px; display: block; margin-top: 4px; }

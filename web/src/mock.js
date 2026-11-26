@@ -224,6 +224,19 @@ export function createMock() {
           save(); return { data: { tagged: n, remaining: 0 }, error: null }
         }
         if (body.action === 'plan_week') return { data: { plan: fakePlan(body.dates) }, error: null }
+        if (body.action === 'group_pages') {
+          const n = body.paths.length, groups = []
+          for (let i = 1; i <= n; i += 3) groups.push({ title: `Recette démo ${groups.length + 1}`, pages: Array.from({ length: Math.min(3, n - i + 1) }, (_, k) => i + k) })
+          return { data: { groups, ignore: [] }, error: null }
+        }
+        if (body.action === 'import_file' && /\.pdf$/.test(body.path)) {
+          const mk = (title) => ({ title, servings: 4, prep_minutes: 30, tags: ['Plat principal'], ingredients: [{ name: 'oignon', quantity: 1, unit: null, category: 'Fruits et légumes' }], steps: ['Cuire.'], description: 'Extraite d\'un PDF (démo).' })
+          const recipes = [mk('Ragoût de boulettes'), mk('Pâté au saumon')]
+          return { data: { recipe: recipes[0], recipes }, error: null }
+        }
+        if (body.action === 'import_pages') return { data: { recipe: {
+          title: `Recette de ${body.paths.length} page(s)`, description: 'Pages lues ensemble (démo).', servings: 4, prep_minutes: 40, tags: ['Plat principal'],
+          ingredients: [{ name: 'poulet', quantity: 1, unit: 'kg', category: 'Viandes et poissons' }], steps: body.paths.map((_, k) => `Étape de la page ${k + 1}.`), health_notes: '' } }, error: null }
         if (body.action.startsWith('import_')) return { data: { recipe: {
           title: 'Pâté chinois revisité', description: 'Version démo extraite automatiquement.', servings: 6, prep_minutes: 50,
           ingredients: [{ name: 'boeuf haché', quantity: 1, unit: 'lb', category: 'Viandes et poissons' }, { name: 'maïs en crème', quantity: 1, unit: 'boîte', category: 'Conserves et sauces' }, { name: 'chou-fleur', quantity: 1, unit: null, category: 'Fruits et légumes' }],
